@@ -35,6 +35,7 @@ cd evo-legged-robotics
 # Create a conda environment in the ./env folder with Python 3.7+
 conda create --prefix ./evo-legged-env python=3.9 -y
 conda activate ./evo-legged-env
+pip install --upgrade pip setuptools wheel
 
 # Install dependencies
 pip install -r requirements.txt
