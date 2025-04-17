@@ -1,42 +1,36 @@
 import pybullet as p
 import numpy as np
+import os
 import math
 
 
 class LeggedRobot:
     """
-    A multi-legged robot model implemented in PyBullet.
+    A multi-legged robot model implemented in PyBullet using URDF.
     This is a port of the original ODE robot model from the C++ code.
     """
     
-    def __init__(self, client=None):
+    def __init__(self, client=None, urdf_path="src/robot/urdf/legged_robot.urdf"):
         """
         Initialize the robot with default parameters.
         
         Args:
             client: PyBullet physics client ID
+            urdf_path: Path to the URDF file
         """
         # Store physics client
         self.client = client if client is not None else p.connect(p.DIRECT)
         
-        # Robot body parameters
+        # Robot parameters (kept for reference and for control)
         self.box_pos = [0.0, 0.0, 0.5]
         self.box_length = 1.0
         self.box_width = 0.4
         self.box_height = 0.2
-        self.box_mass = 1.0
         
         # Robot leg parameters
         self.leg_count = 6
         self.total_legs = 18
         self.dummy_legs = 6
-        self.bar_length = 0.1
-        self.bar_width = 0.2
-        self.bar_height = 0.1
-        self.bar_mass = 0.05
-        self.bar_rest = 0.04
-        
-        # Joint parameters
         self.dof = 3  # degrees of freedom per leg
         
         # Min and max joint angles (in degrees, will be converted to radians)
@@ -44,212 +38,86 @@ class LeggedRobot:
         self.q_range = [90, 60, 60]
         self.q_init = [0, 45, 45]
         
-        # IDs for bodies and joints in PyBullet
-        self.body_id = None
-        self.leg_ids = []
-        self.dummy_leg_ids = []
-        self.joint_ids = []
-        self.dummy_joint_ids = []
-        
         # Current and target joint angles
         self.q_angle = np.zeros((self.leg_count, self.dof))
         self.t_angle = np.zeros((self.leg_count, self.dof))
         
-        # Leg positions
-        self.bar_pos = self._calculate_leg_positions()
-        self.bar_pos2 = self._calculate_dummy_leg_positions()
+        # Load URDF
+        self._load_urdf(urdf_path)
         
-        # Build the robot
-        self._build_robot()
+        # Store joint information
+        self._get_joint_info()
     
-    def _calculate_leg_positions(self):
-        """Calculate positions for all leg segments."""
-        positions = []
+    def _load_urdf(self, urdf_path):
+        """
+        Load the robot from URDF.
         
-        # Front right legs
-        positions.append([(self.box_length-self.bar_length)*0.5, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width), self.box_pos[2]])
-        positions.append([(self.box_length-self.bar_length)*0.5, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width)*2, self.box_pos[2]])
-        positions.append([(self.box_length-self.bar_length)*0.5, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width)*3, self.box_pos[2]])
+        Args:
+            urdf_path: Path to the URDF file
+        """
+        # Check if URDF file exists
+        if not os.path.exists(urdf_path):
+            raise FileNotFoundError(f"URDF file not found: {urdf_path}")
         
-        # Middle right legs
-        positions.append([0.0, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width), self.box_pos[2]])
-        positions.append([0.0, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width)*2, self.box_pos[2]])
-        positions.append([0.0, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width)*3, self.box_pos[2]])
+        # Load URDF
+        self.robot_id = p.loadURDF(
+            urdf_path,
+            basePosition=self.box_pos,
+            useFixedBase=False
+        )
         
-        # Back right legs
-        positions.append([-(self.box_length-self.bar_length)*0.5, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width), self.box_pos[2]])
-        positions.append([-(self.box_length-self.bar_length)*0.5, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width)*2, self.box_pos[2]])
-        positions.append([-(self.box_length-self.bar_length)*0.5, -self.box_width*0.5-self.bar_width*0.5-(self.bar_rest+self.bar_width)*3, self.box_pos[2]])
+        # Enable self-collision
+        p.setCollisionFilterGroupMask(self.robot_id, -1, 0, 0)
         
-        # Front left legs
-        positions.append([(self.box_length-self.bar_length)*0.5, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width), self.box_pos[2]])
-        positions.append([(self.box_length-self.bar_length)*0.5, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width)*2, self.box_pos[2]])
-        positions.append([(self.box_length-self.bar_length)*0.5, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width)*3, self.box_pos[2]])
+        # Get number of joints
+        self.num_joints = p.getNumJoints(self.robot_id)
         
-        # Middle left legs
-        positions.append([0.0, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width), self.box_pos[2]])
-        positions.append([0.0, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width)*2, self.box_pos[2]])
-        positions.append([0.0, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width)*3, self.box_pos[2]])
-        
-        # Back left legs
-        positions.append([-(self.box_length-self.bar_length)*0.5, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width), self.box_pos[2]])
-        positions.append([-(self.box_length-self.bar_length)*0.5, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width)*2, self.box_pos[2]])
-        positions.append([-(self.box_length-self.bar_length)*0.5, self.box_width*0.5+self.bar_width*0.5+(self.bar_rest+self.bar_width)*3, self.box_pos[2]])
-        
-        return positions
+        print(f"Loaded robot from {urdf_path} with {self.num_joints} joints")
     
-    def _calculate_dummy_leg_positions(self):
-        """Calculate positions for dummy legs (attachment points)."""
-        positions = []
+    def _get_joint_info(self):
+        """Get information about all joints."""
+        # Initialize arrays for joint information
+        self.joint_indices = []
+        self.joint_names = []
+        self.joint_types = []
         
-        # Right side dummy legs
-        positions.append([(self.box_length-self.bar_length)*0.5, -self.box_width*0.5-self.bar_width*0.5, self.box_pos[2]])
-        positions.append([0.0, -self.box_width*0.5-self.bar_width*0.5, self.box_pos[2]])
-        positions.append([-(self.box_length-self.bar_length)*0.5, -self.box_width*0.5-self.bar_width*0.5, self.box_pos[2]])
+        # Map from leg index to joint indices
+        self.leg_joints = {}
         
-        # Left side dummy legs
-        positions.append([(self.box_length-self.bar_length)*0.5, self.box_width*0.5+self.bar_width*0.5, self.box_pos[2]])
-        positions.append([0.0, self.box_width*0.5+self.bar_width*0.5, self.box_pos[2]])
-        positions.append([-(self.box_length-self.bar_length)*0.5, self.box_width*0.5+self.bar_width*0.5, self.box_pos[2]])
-        
-        return positions
-    
-    def _build_robot(self):
-        """Build the robot in PyBullet."""
-        # Create main body
-        base_col_id = p.createCollisionShape(
-            p.GEOM_BOX,
-            halfExtents=[self.box_length/2, self.box_width/2, self.box_height/2]
-        )
-        base_vis_id = p.createVisualShape(
-            p.GEOM_BOX,
-            halfExtents=[self.box_length/2, self.box_width/2, self.box_height/2],
-            rgbaColor=[0.5, 0.5, 1.0, 1.0]
-        )
-        self.body_id = p.createMultiBody(
-            baseMass=self.box_mass,
-            baseCollisionShapeIndex=base_col_id,
-            baseVisualShapeIndex=base_vis_id,
-            basePosition=self.box_pos
-        )
-        
-        # Create dummy legs (attachments to body)
-        for i in range(self.dummy_legs):
-            dummy_col_id = p.createCollisionShape(
-                p.GEOM_BOX,
-                halfExtents=[self.bar_length/2, self.bar_width/2, self.bar_height/2]
-            )
-            dummy_vis_id = p.createVisualShape(
-                p.GEOM_BOX,
-                halfExtents=[self.bar_length/2, self.bar_width/2, self.bar_height/2],
-                rgbaColor=[0.6, 0.6, 1.0, 1.0]
-            )
-            dummy_leg = p.createMultiBody(
-                baseMass=self.bar_mass,
-                baseCollisionShapeIndex=dummy_col_id,
-                baseVisualShapeIndex=dummy_vis_id,
-                basePosition=self.bar_pos2[i]
-            )
-            self.dummy_leg_ids.append(dummy_leg)
+        # Get information about each joint
+        for i in range(self.num_joints):
+            joint_info = p.getJointInfo(self.robot_id, i)
+            joint_name = joint_info[1].decode('utf-8')
+            joint_type = joint_info[2]
             
-            # Create constraint between body and dummy leg
-            joint_id = p.createConstraint(
-                parentBodyUniqueId=self.body_id,
-                parentLinkIndex=-1,
-                childBodyUniqueId=dummy_leg,
-                childLinkIndex=-1,
-                jointType=p.JOINT_HINGE,
-                jointAxis=[0, 1, 0],
-                parentFramePosition=[
-                    self.bar_pos2[i][0] - self.box_pos[0],
-                    self.bar_pos2[i][1] - self.box_pos[1],
-                    self.bar_pos2[i][2] - self.box_pos[2]
-                ],
-                childFramePosition=[0, 0, 0]
-            )
-            p.changeConstraint(joint_id, maxForce=10.0)
-            self.dummy_joint_ids.append(joint_id)
+            # Store joint information
+            self.joint_indices.append(i)
+            self.joint_names.append(joint_name)
+            self.joint_types.append(joint_type)
+            
+            # Map joints to legs based on naming convention from URDF
+            if joint_name.startswith('joint_'):
+                # Extract leg index from joint name
+                try:
+                    leg_index = int(joint_name[6:])
+                    leg_group = leg_index // 3
+                    leg_segment = leg_index % 3
+                    
+                    # Initialize the leg group if not already
+                    if leg_group not in self.leg_joints:
+                        self.leg_joints[leg_group] = []
+                    
+                    # Store joint index with its segment position
+                    self.leg_joints[leg_group].append((i, leg_segment))
+                except ValueError:
+                    # Not a leg joint
+                    pass
         
-        # Create actual leg segments and joints
-        leg_col_id = p.createCollisionShape(
-            p.GEOM_BOX,
-            halfExtents=[self.bar_length/2, self.bar_width/2, self.bar_height/2]
-        )
-        leg_vis_id = p.createVisualShape(
-            p.GEOM_BOX,
-            halfExtents=[self.bar_length/2, self.bar_width/2, self.bar_height/2],
-            rgbaColor=[0.6, 0.6, 1.0, 1.0]
-        )
-        
-        # For each leg position, create a leg and joint
-        for i in range(self.total_legs):
-            # Create leg segment
-            leg = p.createMultiBody(
-                baseMass=self.bar_mass,
-                baseCollisionShapeIndex=leg_col_id,
-                baseVisualShapeIndex=leg_vis_id,
-                basePosition=self.bar_pos[i]
-            )
-            self.leg_ids.append(leg)
-            
-            # Create appropriate joint based on leg index
-            if i % 3 == 0:  # First segment connects to dummy leg
-                dummy_index = i // 3 if i < 9 else (i - 9) // 3 + 3
-                
-                # First joint connects to dummy leg
-                joint_id = p.createConstraint(
-                    parentBodyUniqueId=self.dummy_leg_ids[dummy_index],
-                    parentLinkIndex=-1,
-                    childBodyUniqueId=leg,
-                    childLinkIndex=-1,
-                    jointType=p.JOINT_HINGE,
-                    jointAxis=[0, 1, 0],
-                    parentFramePosition=[
-                        self.bar_pos[i][0] - self.bar_pos2[dummy_index][0],
-                        self.bar_pos[i][1] - self.bar_pos2[dummy_index][1],
-                        self.bar_pos[i][2] - self.bar_pos2[dummy_index][2]
-                    ],
-                    childFramePosition=[0, 0, 0]
-                )
-            else:  # Other segments connect to previous leg segment
-                joint_id = p.createConstraint(
-                    parentBodyUniqueId=self.leg_ids[i-1],
-                    parentLinkIndex=-1,
-                    childBodyUniqueId=leg,
-                    childLinkIndex=-1,
-                    jointType=p.JOINT_HINGE,
-                    jointAxis=[1, 0, 0],  # Different axis for subsequent leg segments
-                    parentFramePosition=[
-                        self.bar_pos[i][0] - self.bar_pos[i-1][0],
-                        self.bar_pos[i][1] - self.bar_pos[i-1][1],
-                        self.bar_pos[i][2] - self.bar_pos[i-1][2]
-                    ],
-                    childFramePosition=[0, 0, 0]
-                )
-            
-            # Set joint limits and other parameters
-            p.changeConstraint(
-                joint_id,
-                maxForce=20.0,
-                gearRatio=1,
-                erp=0.2,
-                cfm=0.00001
-            )
-            
-            # Set joint limits
-            lower_limit = -math.pi/2
-            upper_limit = math.pi/2
-            p.setJointMotorControl2(
-                bodyUniqueId=self.leg_ids[i] if i % 3 != 0 else self.dummy_leg_ids[i//3],
-                jointIndex=0,
-                controlMode=p.VELOCITY_CONTROL,
-                targetVelocity=0,
-                force=0
-            )
-            self.joint_ids.append(joint_id)
-            
-        # Initialize with default posture
-        self.reset_posture()
+        # Sort joint indices within each leg by segment
+        for leg_group in self.leg_joints:
+            self.leg_joints[leg_group] = sorted(self.leg_joints[leg_group], key=lambda x: x[1])
+            # Keep only joint indices
+            self.leg_joints[leg_group] = [x[0] for x in self.leg_joints[leg_group]]
     
     def reset_posture(self):
         """Reset the robot to its initial posture."""
@@ -266,23 +134,31 @@ class LeggedRobot:
         """Apply the current target angles to the robot joints."""
         gain = 5.0  # Control gain
         
-        for i in range(self.leg_count):
-            for j in range(self.dof):
-                joint_index = i * self.dof + j
-                current_angle = p.getJointState(self.leg_ids[joint_index], 0)[0]
-                self.q_angle[i][j] = current_angle
+        # Apply to each leg
+        for leg_group in range(self.leg_count):
+            if leg_group in self.leg_joints:
+                joints = self.leg_joints[leg_group]
                 
-                # Calculate velocity based on error
-                velocity = gain * (self.t_angle[i][j] - current_angle)
-                
-                # Apply velocity to joint
-                p.setJointMotorControl2(
-                    bodyUniqueId=self.leg_ids[joint_index],
-                    jointIndex=0,
-                    controlMode=p.VELOCITY_CONTROL,
-                    targetVelocity=velocity,
-                    force=20.0
-                )
+                # Apply to each joint in this leg
+                for j, joint_index in enumerate(joints):
+                    if j < self.dof:
+                        # Get current joint angle
+                        joint_state = p.getJointState(self.robot_id, joint_index)
+                        current_angle = joint_state[0]
+                        self.q_angle[leg_group][j] = current_angle
+                        
+                        # Calculate velocity based on error
+                        target_angle = self.t_angle[leg_group][j]
+                        velocity = gain * (target_angle - current_angle)
+                        
+                        # Apply velocity to joint
+                        p.setJointMotorControl2(
+                            bodyUniqueId=self.robot_id,
+                            jointIndex=joint_index,
+                            controlMode=p.VELOCITY_CONTROL,
+                            targetVelocity=velocity,
+                            force=20.0
+                        )
     
     def set_target_angles(self, angles):
         """
@@ -295,17 +171,17 @@ class LeggedRobot:
     
     def get_position(self):
         """Get current position of the robot body."""
-        pos, _ = p.getBasePositionAndOrientation(self.body_id)
+        pos, _ = p.getBasePositionAndOrientation(self.robot_id)
         return pos
     
     def get_orientation(self):
         """Get current orientation of the robot body."""
-        _, orn = p.getBasePositionAndOrientation(self.body_id)
+        _, orn = p.getBasePositionAndOrientation(self.robot_id)
         return orn
     
     def get_state(self):
         """Get complete state of the robot (position, orientation, joint angles)."""
-        pos, orn = p.getBasePositionAndOrientation(self.body_id)
+        pos, orn = p.getBasePositionAndOrientation(self.robot_id)
         rot_matrix = p.getMatrixFromQuaternion(orn)
         
         state = {

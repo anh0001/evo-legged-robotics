@@ -1,0 +1,657 @@
+<?xml version="1.0"?>
+<robot name="legged_robot">
+    <!-- Colors -->
+    <material name="blue">
+        <color rgba="0.5 0.5 1.0 1.0"/>
+    </material>
+    <material name="light_blue">
+        <color rgba="0.6 0.6 1.0 1.0"/>
+    </material>
+    <material name="pink">
+        <color rgba="1.0 0.0 1.0 1.0"/>
+    </material>
+    
+    <!-- Main body -->
+    <link name="base_link">
+        <visual>
+            <geometry>
+                <box size="1.0 0.4 0.2"/>
+            </geometry>
+            <material name="blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="1.0 0.4 0.2"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="1.0"/>
+            <inertia ixx="0.01666666666666667" ixy="0.0" ixz="0.0" iyy="0.08666666666666667" iyz="0.0" izz="0.09666666666666668"/>
+        </inertial>
+    </link>
+
+    <link name="dummy_leg_0">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="body_to_dummy_0" type="fixed">
+        <parent link="base_link"/>
+        <child link="dummy_leg_0"/>
+        <origin xyz="0.45 -0.30000000000000004 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="0" upper="0" effort="10.0" velocity="0"/>
+    </joint>
+
+    <link name="dummy_leg_1">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="body_to_dummy_1" type="fixed">
+        <parent link="base_link"/>
+        <child link="dummy_leg_1"/>
+        <origin xyz="0.0 -0.30000000000000004 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="0" upper="0" effort="10.0" velocity="0"/>
+    </joint>
+
+    <link name="dummy_leg_2">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="body_to_dummy_2" type="fixed">
+        <parent link="base_link"/>
+        <child link="dummy_leg_2"/>
+        <origin xyz="-0.45 -0.30000000000000004 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="0" upper="0" effort="10.0" velocity="0"/>
+    </joint>
+
+    <link name="dummy_leg_3">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="body_to_dummy_3" type="fixed">
+        <parent link="base_link"/>
+        <child link="dummy_leg_3"/>
+        <origin xyz="0.45 0.30000000000000004 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="0" upper="0" effort="10.0" velocity="0"/>
+    </joint>
+
+    <link name="dummy_leg_4">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="body_to_dummy_4" type="fixed">
+        <parent link="base_link"/>
+        <child link="dummy_leg_4"/>
+        <origin xyz="0.0 0.30000000000000004 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="0" upper="0" effort="10.0" velocity="0"/>
+    </joint>
+
+    <link name="dummy_leg_5">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="body_to_dummy_5" type="fixed">
+        <parent link="base_link"/>
+        <child link="dummy_leg_5"/>
+        <origin xyz="-0.45 0.30000000000000004 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="0" upper="0" effort="10.0" velocity="0"/>
+    </joint>
+
+    <link name="leg_0">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_0" type="revolute">
+        <parent link="dummy_leg_0"/>
+        <child link="leg_0"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_1">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_1" type="revolute">
+        <parent link="leg_0"/>
+        <child link="leg_1"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_2">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_2" type="revolute">
+        <parent link="leg_1"/>
+        <child link="leg_2"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_3">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_3" type="revolute">
+        <parent link="dummy_leg_1"/>
+        <child link="leg_3"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_4">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_4" type="revolute">
+        <parent link="leg_3"/>
+        <child link="leg_4"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_5">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_5" type="revolute">
+        <parent link="leg_4"/>
+        <child link="leg_5"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_6">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_6" type="revolute">
+        <parent link="dummy_leg_2"/>
+        <child link="leg_6"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_7">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_7" type="revolute">
+        <parent link="leg_6"/>
+        <child link="leg_7"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_8">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_8" type="revolute">
+        <parent link="leg_7"/>
+        <child link="leg_8"/>
+        <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_9">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_9" type="revolute">
+        <parent link="dummy_leg_3"/>
+        <child link="leg_9"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_10">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_10" type="revolute">
+        <parent link="leg_9"/>
+        <child link="leg_10"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_11">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_11" type="revolute">
+        <parent link="leg_10"/>
+        <child link="leg_11"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_12">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_12" type="revolute">
+        <parent link="dummy_leg_4"/>
+        <child link="leg_12"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_13">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_13" type="revolute">
+        <parent link="leg_12"/>
+        <child link="leg_13"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_14">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_14" type="revolute">
+        <parent link="leg_13"/>
+        <child link="leg_14"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_15">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_15" type="revolute">
+        <parent link="dummy_leg_5"/>
+        <child link="leg_15"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_16">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_16" type="revolute">
+        <parent link="leg_15"/>
+        <child link="leg_16"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+    <link name="leg_17">
+        <visual>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+            <material name="light_blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.2 0.1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/>
+            <inertia ixx="0.00020833333333333337" ixy="0.0" ixz="0.0" iyy="8.333333333333336e-05" iyz="0.0" izz="0.00020833333333333337"/>
+        </inertial>
+    </link>
+    
+    <joint name="joint_17" type="revolute">
+        <parent link="leg_16"/>
+        <child link="leg_17"/>
+        <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
+    </joint>
+
+</robot>
