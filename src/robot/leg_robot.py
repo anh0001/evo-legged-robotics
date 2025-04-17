@@ -191,3 +191,8 @@ class LeggedRobot:
             'joint_angles': self.q_angle.copy()
         }
         return state
+    
+    @property
+    def body_id(self):
+        """Return the robot ID for compatibility."""
+        return self.robot_id
