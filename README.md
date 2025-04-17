@@ -9,7 +9,7 @@ A Python implementation of evolutionary robotics for legged robots using the PyB
 
 ## Overview
 
-This project is a Python port of evolutionary robotics code originally implemented in C++ using the Open Dynamics Engine (ODE). The implementation uses PyBullet for physics simulation and implements various evolutionary algorithms to generate effective locomotion patterns for multi-legged robots.
+The implementation uses PyBullet for physics simulation and implements various evolutionary algorithms to generate effective locomotion patterns for multi-legged robots.
 
 The robot model features a main body with multiple articulated legs, each with multiple degrees of freedom. The project includes:
 
