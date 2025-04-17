@@ -32,9 +32,9 @@ The robot model features a main body with multiple articulated legs, each with m
 git clone https://github.com/yourusername/evo-legged-robotics.git
 cd evo-legged-robotics
 
-# Create a virtual environment (optional but recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create a conda environment in the ./env folder with Python 3.7+
+conda create --prefix ./evo-legged-env python=3.9 -y
+conda activate ./evo-legged-env
 
 # Install dependencies
 pip install -r requirements.txt
