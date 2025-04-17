@@ -1,0 +1,2 @@
+This is a placeholder for the robot simulation image.
+In the actual repository, this would be a screenshot or diagram of the robot.

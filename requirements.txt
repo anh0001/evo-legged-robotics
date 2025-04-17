@@ -1,0 +1,5 @@
+numpy>=1.19.0
+pybullet>=3.2.0
+tensorflow>=2.7.0
+matplotlib>=3.5.0
+pytest>=6.0.0
