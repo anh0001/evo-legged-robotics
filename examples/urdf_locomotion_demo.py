@@ -37,13 +37,9 @@ def run_demo(gait_type="tripod"):
     # Create environment
     env = Environment(render=True)
     
-    # Create robot (using the URDF)
     robot_start_pos = [0, 0, 0.5]
-    robot_id = p.loadURDF(
-        URDF_PATH,
-        basePosition=robot_start_pos,
-        useFixedBase=False
-    )
+    
+    # This will load the URDF internally
     robot = LeggedRobot(client=env.client, urdf_path=URDF_PATH)
     env.add_robot(robot)
     
