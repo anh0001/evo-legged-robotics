@@ -29,7 +29,7 @@ The robot model features a main body with multiple articulated legs, each with m
 
 ```bash
 # Clone the repository
-git clone https://github.com/anh0001/evo-legged-robotics.git
+git clone https://github.com/yourusername/evo-legged-robotics.git
 cd evo-legged-robotics
 
 # Create a virtual environment (optional but recommended)
@@ -50,6 +50,26 @@ pip install -e .
 - NumPy
 - TensorFlow or PyTorch (for neural network implementation)
 - Matplotlib (for visualization)
+
+## Usage Example
+
+The main.py script demonstrates how to use the library:
+
+```python
+# Run with standard locomotion
+python main.py --mode standard
+
+# Run with evolutionary algorithm
+python main.py --mode evolution
+
+# Run with neural network control
+python main.py --mode neural
+
+# Run with adaptive control on rough terrain
+python main.py --mode adaptive
+```
+
+This implementation should provide researchers and developers with a modern, flexible framework for experimenting with evolutionary robotics and legged locomotion.
 
 ## Quick Start
 
@@ -128,22 +148,6 @@ Key concepts from the original implementation:
 - Evolutionary adaptation to different terrain types
 - Neural network controllers that learn from simulated experience
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request or open an Issue for discussion.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- This project is based on evolutionary robotics research by Kubota Lab
-- The original implementation used Open Dynamics Engine (ODE)
-- Special thanks to the PyBullet community for their excellent physics engine
