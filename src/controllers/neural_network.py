@@ -357,7 +357,7 @@ class AdaptiveController:
         tilt = 0
         if 'rotation_matrix' in state:
             # Get the z-component of the up vector
-            z_up = state['rotation_matrix'][10]  # 3rd column, 3rd row
+            z_up = state['rotation_matrix'][8]  # 3rd column, 3rd row (z-axis up)
             tilt = 1.0 - z_up
         
         # Store stability measure
