@@ -195,6 +195,7 @@ def run_neural_demo(env, robot):
             
             # Apply full angles to robot
             robot.set_target_angles(all_angles)
+            robot.apply_target_angles()
             
             # Step simulation
             env.step()
