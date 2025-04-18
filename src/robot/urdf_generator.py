@@ -224,6 +224,50 @@ def generate_urdf():
             
             leg_index += 1
     
+    # Add a head to indicate the front of the robot
+    head_length = 0.2  # Length (in x direction)
+    head_width = 0.15  # Width (in y direction)
+    head_height = 0.1  # Height (in z direction)
+    head_mass = 0.1    # Lightweight
+    
+    # Position the head at the front of the body
+    head_x = box_length / 2  # At the front edge of the body
+    head_y = 0               # Centered horizontally
+    head_z = box_height      # On top of the body
+    
+    urdf_content += """
+    <link name="head">
+        <visual>
+            <geometry>
+                <box size="{0} {1} {2}"/>
+            </geometry>
+            <material name="pink"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="{0} {1} {2}"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="{3}"/>
+            <inertia ixx="{4}" ixy="0.0" ixz="0.0" iyy="{5}" iyz="0.0" izz="{6}"/>
+        </inertial>
+    </link>
+    
+    <joint name="body_to_head" type="fixed">
+        <parent link="base_link"/>
+        <child link="head"/>
+        <origin xyz="{7} {8} {9}" rpy="0 0 0"/>
+    </joint>
+""".format(
+        head_length, head_width, head_height,
+        head_mass,
+        head_mass * (head_width**2 + head_height**2) / 12.0,  # ixx
+        head_mass * (head_length**2 + head_height**2) / 12.0,  # iyy
+        head_mass * (head_length**2 + head_width**2) / 12.0,   # izz
+        head_x, head_y, head_z
+    )
+    
     # Close the URDF file
     urdf_content += """
 </robot>
