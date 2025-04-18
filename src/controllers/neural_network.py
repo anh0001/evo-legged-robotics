@@ -204,7 +204,7 @@ class NeuralController:
             'training_data': self.training_data
         }
         
-        with open(filename + ".pkl", 'wb') as f:
+        with open(filename, 'wb') as f:
             pickle.dump(params, f)
     
     @classmethod
@@ -218,8 +218,14 @@ class NeuralController:
         Returns:
             Loaded controller
         """
-        # Load parameters
-        with open(filename + ".pkl", 'rb') as f:
+        # Use alternative file if it exists
+        alt_filename = filename + ".weights.h5"
+        default_filename = filename + ".pkl"
+        if os.path.exists(alt_filename):
+            filename_to_load = alt_filename
+        else:
+            filename_to_load = default_filename
+        with open(filename_to_load, 'rb') as f:
             params = pickle.load(f)
         
         # Create a new controller

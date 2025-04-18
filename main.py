@@ -166,7 +166,7 @@ def run_neural_demo(env, robot):
     # Check if we have a pre-trained neural controller
     model_path = "models/neural_controller"
     
-    if os.path.exists(model_path + ".pkl"):
+    if os.path.exists(model_path + ".weights.h5"):
         print(f"Loading pre-trained neural controller from {model_path}")
         nn_controller = NeuralController.load(model_path)
     else:
@@ -237,10 +237,12 @@ def run_neural_demo(env, robot):
         
         if len(stability_history) > 10:
             avg_stability = np.mean(stability_history[-10:])
-            if avg_stability < 0.8:
+            if avg_stability < 0.95:  # Make this higher so it's more likely to trigger
                 use_neural = True
-            elif avg_stability > 0.9:
+            elif avg_stability > 0.98:
                 use_neural = False
+
+        use_neural = True  # Force neural controller for demo
         
         if use_neural:
             corner_leg_angles = nn_controller.predict(state)
