@@ -208,7 +208,7 @@
         <parent link="dummy_leg_0"/>
         <child link="leg_0"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="0 -1 0"/>
+        <axis xyz="0 1 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -234,7 +234,7 @@
         <parent link="leg_0"/>
         <child link="leg_1"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="1 0 0"/>
+        <axis xyz="-1 0 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -260,7 +260,7 @@
         <parent link="leg_1"/>
         <child link="leg_2"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="1 0 0"/>
+        <axis xyz="-1 0 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -286,7 +286,7 @@
         <parent link="dummy_leg_1"/>
         <child link="leg_3"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="0 -1 0"/>
+        <axis xyz="0 1 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -312,7 +312,7 @@
         <parent link="leg_3"/>
         <child link="leg_4"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="1 0 0"/>
+        <axis xyz="-1 0 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -338,7 +338,7 @@
         <parent link="leg_4"/>
         <child link="leg_5"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="1 0 0"/>
+        <axis xyz="-1 0 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -364,7 +364,7 @@
         <parent link="dummy_leg_2"/>
         <child link="leg_6"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="0 -1 0"/>
+        <axis xyz="0 1 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -390,7 +390,7 @@
         <parent link="leg_6"/>
         <child link="leg_7"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="1 0 0"/>
+        <axis xyz="-1 0 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -416,7 +416,7 @@
         <parent link="leg_7"/>
         <child link="leg_8"/>
         <origin xyz="0.0 -0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="1 0 0"/>
+        <axis xyz="-1 0 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -442,7 +442,7 @@
         <parent link="dummy_leg_3"/>
         <child link="leg_9"/>
         <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="0 -1 0"/>
+        <axis xyz="0 1 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -520,7 +520,7 @@
         <parent link="dummy_leg_4"/>
         <child link="leg_12"/>
         <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="0 -1 0"/>
+        <axis xyz="0 1 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 
@@ -598,7 +598,7 @@
         <parent link="dummy_leg_5"/>
         <child link="leg_15"/>
         <origin xyz="0.0 0.24 0.0" rpy="0 0 0"/>
-        <axis xyz="0 -1 0"/>
+        <axis xyz="0 1 0"/>
         <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="20.0" velocity="1.0"/>
     </joint>
 

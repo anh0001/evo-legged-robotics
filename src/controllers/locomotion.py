@@ -231,17 +231,19 @@ class LocomotionGenerator:
         # Set target angles for each leg
         for leg in range(self.leg_count):
             for dof in range(self.dof):
-                # Different handling for right and left side legs
-                if leg < 3:  # Right side legs
-                    if leg % 2 == 0:  # Even legs use phase 0
-                        angles[leg, dof] = -np.radians(self.phase_angles[phase, 0, dof])
-                    else:  # Odd legs use phase 1
-                        angles[leg, dof] = -np.radians(self.phase_angles[phase, 1, dof])
-                else:  # Left side legs
-                    if leg % 2 == 0:  # Even legs use phase 0
-                        angles[leg, dof] = np.radians(self.phase_angles[phase, 0, dof])
-                    else:  # Odd legs use phase 1
-                        angles[leg, dof] = np.radians(self.phase_angles[phase, 1, dof])
+                leg_phase = 0 if leg % 2 == 0 else 1  # Even legs use phase 0, odd use phase 1
+                
+                # Apply signs correctly based on DOF and leg position
+                if dof == 0:  # First DOF (leg angle)
+                    # No negation for DOF 0, just use the raw angle value
+                    angles[leg, dof] = np.radians(self.phase_angles[phase, leg_phase, dof])
+                else:  # Other DOFs (middle and end joints)
+                    if leg < 3:  # Right side legs
+                        # Negate angles for right-side legs for DOFs other than 0
+                        angles[leg, dof] = -np.radians(self.phase_angles[phase, leg_phase, dof])
+                    else:  # Left side legs
+                        # Don't negate for left-side legs
+                        angles[leg, dof] = np.radians(self.phase_angles[phase, leg_phase, dof])
         
         return angles
     
