@@ -154,6 +154,7 @@ def generate_urdf():
     # Define leg segments and joints
     leg_index = 0
     for leg_group in range(6):  # 6 legs (3 on each side)
+        is_left_side = leg_group >= 3  # first 3 legs are on the right; last 3 on the left
         # Each leg has 3 segments
         for segment in range(3):
             if segment == 0:
@@ -174,7 +175,11 @@ def generate_urdf():
                 # Other segments connect to the previous segment
                 parent_link = f"leg_{leg_index-1}"
                 joint_type = "revolute"
-                joint_axis = "1 0 0"  # Rotate around x-axis (vertical)
+                # Change axis direction for left side legs to naturally mirror right leg motion
+                if is_left_side:
+                    joint_axis = "-1 0 0"  # Inverted x-axis for left legs
+                else:
+                    joint_axis = "1 0 0"  # Standard x-axis for right legs
                 
                 # Position relative to previous segment
                 x, y, z = leg_positions[leg_index]
