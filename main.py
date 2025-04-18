@@ -168,30 +168,27 @@ def run_neural_demo(env, robot):
     
     if os.path.exists(model_path + ".pkl"):
         print(f"Loading pre-trained neural controller from {model_path}")
-        # Load controller
         nn_controller = NeuralController.load(model_path)
     else:
         print("No pre-trained controller found. Creating a new one...")
-        # Create a neural controller
-        nn_controller = NeuralController()
+        # Create a neural controller with dimensions matching C++ version
+        nn_controller = NeuralController(input_dim=15, hidden_dim=30, output_dim=12)
         
-        # Create some training data using a simple locomotion pattern
+        # Create a locomotion generator for training data
         locomotion = LocomotionGenerator(robot)
         locomotion.define_tripod_gait()
         
         print("Generating training data...")
-        # Collect training data
-        for i in range(100):
+        
+        # Track vertical stability for feedback
+        prev_rot_matrix = np.array(robot.get_state()['rotation_matrix']).reshape(3, 3)
+        prev_z_dir = prev_rot_matrix[2, 2]
+        
+        # Collect training data with stability feedback (500 steps)
+        for i in range(500):
             all_angles = locomotion.get_next_angles()
-            # Select only the corner legs (0, 2, 3, 5) for the neural network (expects 12 outputs)
             corner_legs = [0, 2, 3, 5]
             target_angles = np.array([all_angles[leg_idx] for leg_idx in corner_legs]).flatten()
-            
-            # Get current state
-            state = robot.get_state()
-            
-            # Train neural network
-            nn_controller.learn(state, target_angles)
             
             # Apply full angles to robot
             robot.set_target_angles(all_angles)
@@ -199,36 +196,71 @@ def run_neural_demo(env, robot):
             
             # Step simulation
             env.step()
+            
+            # Get current state and compute stability measure
+            state = robot.get_state()
+            rot_matrix = np.array(state['rotation_matrix']).reshape(3, 3)
+            current_z_dir = rot_matrix[2, 2]
+            
+            # Learn only when stability (uprightness) improves
+            if current_z_dir > prev_z_dir:
+                nn_controller.learn(state, target_angles)
+                
+            prev_z_dir = current_z_dir
+            
+            if i % 100 == 0:
+                pos = robot.get_position()
+                print(f"Training Step {i}: Robot position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f})")
         
-        # Save controller
+        print("Performing batch learning...")
+        history = nn_controller.batch_learn(epochs=50)
+        
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         nn_controller.save(model_path)
     
     # Run simulation with the neural controller
-    for i in range(500):
-        # Get current state
+    print("Running with neural controller...")
+    
+    # Reset robot posture
+    robot.reset_posture()
+    
+    # Execution phase with stability-based switching
+    stability_history = []
+    use_neural = False
+    
+    for i in range(1000):
         state = robot.get_state()
+        rot_matrix = np.array(state['rotation_matrix']).reshape(3, 3)
+        current_z_dir = rot_matrix[2, 2]
+        stability = current_z_dir  # Higher value means more upright
+        stability_history.append(stability)
         
-        # Get target angles from neural network (for corner legs only)
-        corner_leg_angles = nn_controller.predict(state)
+        if len(stability_history) > 10:
+            avg_stability = np.mean(stability_history[-10:])
+            if avg_stability < 0.8:
+                use_neural = True
+            elif avg_stability > 0.9:
+                use_neural = False
         
-        # Expand predictions to all 6 legs (initialize with zeros)
-        target_angles = np.zeros((6, 3))
-        corner_legs = [0, 2, 3, 5]
-        for idx, leg_idx in enumerate(corner_legs):
-            target_angles[leg_idx] = corner_leg_angles[idx*3:(idx+1)*3]
+        if use_neural:
+            corner_leg_angles = nn_controller.predict(state)
+            target_angles = np.zeros((6, 3))
+            corner_legs = [0, 2, 3, 5]
+            for idx, leg_idx in enumerate(corner_legs):
+                target_angles[leg_idx] = corner_leg_angles[idx*3:(idx+1)*3]
+        else:
+            locomotion = LocomotionGenerator(robot)
+            locomotion.define_tripod_gait()
+            target_angles = locomotion.get_next_angles()
         
-        # Apply to robot (all 6 legs)
         robot.set_target_angles(target_angles)
         robot.apply_target_angles()
         
-        # Step simulation
         env.step()
         
-        # Print progress every 100 steps
         if i % 100 == 0:
             pos = robot.get_position()
-            print(f"Step {i}: Robot position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f})")
+            print(f"Execution Step {i}: Robot position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), Neural: {use_neural}")
 
 
 def run_adaptive_demo(env, robot):

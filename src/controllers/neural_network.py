@@ -93,7 +93,7 @@ class NeuralController:
         """
         Preprocess the input state for the neural network.
         Following the C++ implementation which uses 4 legs + orientation.
-        
+
         Args:
             state: Raw robot state
         
@@ -111,10 +111,9 @@ class NeuralController:
         
         # Last 3 inputs: robot orientation (z-axis from rotation matrix)
         if 'rotation_matrix' in state:
-            rot_matrix = state['rotation_matrix']
-            # In PyBullet, the 3x3 rotation matrix is flattened in row-major order.
-            # The z-axis components are in indices 6, 7, 8 instead of ODE's indices 8, 9, 10.
-            x[12:15] = [self._sigmoid(rot_matrix[6]), self._sigmoid(rot_matrix[7]), self._sigmoid(rot_matrix[8])]
+            rot_matrix = np.array(state['rotation_matrix']).reshape(3, 3)
+            # Get z-axis direction (third column of the rotation matrix)
+            x[12:15] = [self._sigmoid(rot_matrix[i, 2]) for i in range(3)]
         
         return x
     
@@ -149,8 +148,12 @@ class NeuralController:
         x_batch = np.array([x])
         y_batch = np.array([target_angles])
         
-        # Train for one step
-        history = self.model.fit(x_batch, y_batch, epochs=1, verbose=0)
+        # Use a higher learning rate for single examples
+        self.model.optimizer.learning_rate = 0.05
+        
+        # Train for multiple steps on this example
+        for _ in range(3):
+            history = self.model.fit(x_batch, y_batch, epochs=1, verbose=0)
         return history.history['loss'][0]
     
     def batch_learn(self, epochs=10):
