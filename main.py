@@ -7,6 +7,7 @@ This script demonstrates how to use the various components.
 import argparse
 import time
 import os
+import pickle
 import numpy as np
 
 import pybullet as p
