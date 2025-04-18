@@ -24,6 +24,17 @@ class NeuralController:
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         
+        # Learning parameters
+        self.learning_rate = 0.01
+        self.momentum = 0.2
+        self.dropout_rate = 1.0  # No dropout
+        
+        # Optimizer (moved above model building)
+        self.optimizer = tf.keras.optimizers.SGD(
+            learning_rate=self.learning_rate,
+            momentum=self.momentum
+        )
+        
         # Set up TensorFlow model
         self.model = self._build_model()
         
@@ -31,17 +42,6 @@ class NeuralController:
         self.training_data = []
         self.num_samples = 0
         self.max_samples = 200
-        
-        # Learning parameters
-        self.learning_rate = 0.01
-        self.momentum = 0.2
-        self.dropout_rate = 1.0  # No dropout
-        
-        # Optimizer
-        self.optimizer = tf.keras.optimizers.SGD(
-            learning_rate=self.learning_rate,
-            momentum=self.momentum
-        )
     
     def _build_model(self):
         """
