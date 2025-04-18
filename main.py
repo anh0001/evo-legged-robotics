@@ -182,8 +182,10 @@ def run_neural_demo(env, robot):
         print("Generating training data...")
         # Collect training data
         for i in range(100):
-            # Get target angles from locomotion generator
-            target_angles = locomotion.get_next_angles().flatten()
+            all_angles = locomotion.get_next_angles()
+            # Select only the corner legs (0, 2, 3, 5) for the neural network (expects 12 outputs)
+            corner_legs = [0, 2, 3, 5]
+            target_angles = np.array([all_angles[leg_idx] for leg_idx in corner_legs]).flatten()
             
             # Get current state
             state = robot.get_state()
@@ -191,8 +193,8 @@ def run_neural_demo(env, robot):
             # Train neural network
             nn_controller.learn(state, target_angles)
             
-            # Apply angles to robot
-            robot.set_target_angles(locomotion.get_next_angles())
+            # Apply full angles to robot
+            robot.set_target_angles(all_angles)
             
             # Step simulation
             env.step()
@@ -206,13 +208,16 @@ def run_neural_demo(env, robot):
         # Get current state
         state = robot.get_state()
         
-        # Get target angles from neural network
-        target_angles = nn_controller.predict(state)
+        # Get target angles from neural network (for corner legs only)
+        corner_leg_angles = nn_controller.predict(state)
         
-        # Reshape to match robot's expected format
-        target_angles = target_angles.reshape(6, 3)
+        # Expand predictions to all 6 legs (initialize with zeros)
+        target_angles = np.zeros((6, 3))
+        corner_legs = [0, 2, 3, 5]
+        for idx, leg_idx in enumerate(corner_legs):
+            target_angles[leg_idx] = corner_leg_angles[idx*3:(idx+1)*3]
         
-        # Apply to robot
+        # Apply to robot (all 6 legs)
         robot.set_target_angles(target_angles)
         robot.apply_target_angles()
         

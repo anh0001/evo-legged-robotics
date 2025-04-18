@@ -112,7 +112,9 @@ class NeuralController:
         # Last 3 inputs: robot orientation (z-axis from rotation matrix)
         if 'rotation_matrix' in state:
             rot_matrix = state['rotation_matrix']
-            x[12:15] = [self._sigmoid(rot_matrix[8]), self._sigmoid(rot_matrix[9]), self._sigmoid(rot_matrix[10])]
+            # In PyBullet, the 3x3 rotation matrix is flattened in row-major order.
+            # The z-axis components are in indices 6, 7, 8 instead of ODE's indices 8, 9, 10.
+            x[12:15] = [self._sigmoid(rot_matrix[6]), self._sigmoid(rot_matrix[7]), self._sigmoid(rot_matrix[8])]
         
         return x
     
@@ -183,7 +185,9 @@ class NeuralController:
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         
         # Save model weights
-        self.model.save_weights(filename + ".h5")
+        if not filename.endswith(".weights.h5"):
+            filename += ".weights.h5"
+        self.model.save_weights(filename)
         
         # Save other controller parameters
         params = {
@@ -230,7 +234,7 @@ class NeuralController:
         controller.training_data = params['training_data']
         
         # Load weights
-        controller.model.load_weights(filename + ".h5")
+        controller.model.load_weights(filename + ".weights.h5")
         
         return controller
     
