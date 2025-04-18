@@ -80,6 +80,7 @@ def run_standard_demo(env, robot):
         
         # Apply to robot
         robot.set_target_angles(angles)
+        robot.apply_target_angles()
         
         # Step simulation
         env.step()
