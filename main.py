@@ -192,9 +192,10 @@ def run_neural_demo(env, robot):
             rot_matrix = np.array(state['rotation_matrix']).reshape(3, 3)
             current_z_dir = rot_matrix[2, 2]
             
-            # Learn only when stability (uprightness) improves
-            if current_z_dir > prev_z_dir:
-                nn_controller.learn(state, target_angles)
+            # # Learn only when stability (uprightness) improves
+            # if current_z_dir > prev_z_dir:
+            #     nn_controller.learn(state, target_angles)
+            nn_controller.learn(state, target_angles)
                 
             prev_z_dir = current_z_dir
             
@@ -231,7 +232,6 @@ def run_neural_demo(env, robot):
                 use_neural = True
             elif avg_stability > 0.98:
                 use_neural = False
-
         use_neural = True  # Force neural controller for demo
         
         if use_neural:
