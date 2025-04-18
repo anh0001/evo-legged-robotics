@@ -3,6 +3,8 @@ import tensorflow as tf
 import pickle
 import os
 import matplotlib.pyplot as plt
+# Maximum joint angle for normalization
+MAX_ANGLE = np.radians(90)
 
 
 class NeuralController:
@@ -50,25 +52,12 @@ class NeuralController:
         Returns:
             TensorFlow model
         """
-        model = tf.keras.Sequential([
-            tf.keras.layers.Dense(
-                self.hidden_dim, 
-                activation='sigmoid',
-                input_shape=(self.input_dim,),
-                kernel_initializer=tf.keras.initializers.RandomNormal(stddev=0.01)
-            ),
-            tf.keras.layers.Dense(
-                self.output_dim,
-                kernel_initializer=tf.keras.initializers.RandomNormal(stddev=0.01)
-            )
-        ])
-        
-        # Use MSE loss and SGD optimizer
-        model.compile(
-            optimizer=self.optimizer,
-            loss='mse'
-        )
-        
+        inp = tf.keras.Input(shape=(self.input_dim,))
+        x = tf.keras.layers.Dense(self.hidden_dim, activation='relu')(inp)
+        x = tf.keras.layers.Dense(self.hidden_dim // 2, activation='relu')(x)
+        out = tf.keras.layers.Dense(self.output_dim, activation='tanh')(x)
+        model = tf.keras.Model(inputs=inp, outputs=out)
+        model.compile(optimizer=self.optimizer, loss='mse')
         return model
     
     def predict(self, state):
@@ -85,9 +74,9 @@ class NeuralController:
         x = self._preprocess_input(state)
         
         # Make prediction
-        y = self.model.predict(np.array([x]), verbose=0)[0]
-        
-        return y
+        y_norm = self.model.predict(np.array([x]), verbose=0)[0]
+        # Scale back to real joint angles
+        return y_norm * MAX_ANGLE
     
     def _preprocess_input(self, state):
         """
@@ -146,7 +135,9 @@ class NeuralController:
         
         # Train on this example
         x_batch = np.array([x])
-        y_batch = np.array([target_angles])
+        # Normalize target angles to [-1,1]
+        y_norm = target_angles / MAX_ANGLE
+        y_batch = np.array([y_norm])
         
         # Use a higher learning rate for single examples
         self.model.optimizer.learning_rate = 0.05
@@ -171,7 +162,8 @@ class NeuralController:
         
         # Prepare batch data
         x_batch = np.array([x for x, _ in self.training_data])
-        y_batch = np.array([y for _, y in self.training_data])
+        # Normalize target angles to [-1,1]
+        y_batch = np.array([y for _, y in self.training_data]) / MAX_ANGLE
         
         # Train on all examples
         history = self.model.fit(x_batch, y_batch, epochs=epochs, verbose=1)
@@ -187,12 +179,11 @@ class NeuralController:
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         
-        # Save model weights
-        if not filename.endswith(".weights.h5"):
-            filename += ".weights.h5"
-        self.model.save_weights(filename)
+        # Save model weights and parameters to separate files
+        weights_path = filename + ".weights.h5"
+        params_path  = filename + ".pkl"
+        self.model.save_weights(weights_path)
         
-        # Save other controller parameters
         params = {
             'input_dim': self.input_dim,
             'hidden_dim': self.hidden_dim,
@@ -204,7 +195,7 @@ class NeuralController:
             'training_data': self.training_data
         }
         
-        with open(filename, 'wb') as f:
+        with open(params_path, 'wb') as f:
             pickle.dump(params, f)
     
     @classmethod
@@ -218,14 +209,9 @@ class NeuralController:
         Returns:
             Loaded controller
         """
-        # Use alternative file if it exists
-        alt_filename = filename + ".weights.h5"
-        default_filename = filename + ".pkl"
-        if os.path.exists(alt_filename):
-            filename_to_load = alt_filename
-        else:
-            filename_to_load = default_filename
-        with open(filename_to_load, 'rb') as f:
+        params_path  = filename + ".pkl"
+        weights_path = filename + ".weights.h5"
+        with open(params_path, 'rb') as f:
             params = pickle.load(f)
         
         # Create a new controller
@@ -243,7 +229,7 @@ class NeuralController:
         controller.training_data = params['training_data']
         
         # Load weights
-        controller.model.load_weights(filename + ".weights.h5")
+        controller.model.load_weights(weights_path)
         
         return controller
     

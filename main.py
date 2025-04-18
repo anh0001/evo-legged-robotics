@@ -192,10 +192,9 @@ def run_neural_demo(env, robot):
             rot_matrix = np.array(state['rotation_matrix']).reshape(3, 3)
             current_z_dir = rot_matrix[2, 2]
             
-            # # Learn only when stability (uprightness) improves
-            # if current_z_dir > prev_z_dir:
-            #     nn_controller.learn(state, target_angles)
-            nn_controller.learn(state, target_angles)
+            # Learn only when stability (uprightness) improves
+            if current_z_dir > prev_z_dir:
+                nn_controller.learn(state, target_angles)
                 
             prev_z_dir = current_z_dir
             
@@ -214,6 +213,9 @@ def run_neural_demo(env, robot):
     
     # Reset robot posture
     robot.reset_posture()
+    # Initialize locomotion generator for fallback gait
+    locomotion = LocomotionGenerator(robot)
+    locomotion.define_tripod_gait()
     
     # Execution phase with stability-based switching
     stability_history = []
@@ -228,11 +230,10 @@ def run_neural_demo(env, robot):
         
         if len(stability_history) > 10:
             avg_stability = np.mean(stability_history[-10:])
-            if avg_stability < 0.95:  # Make this higher so it's more likely to trigger
+            if avg_stability < 0.8:  # Make this higher so it's more likely to trigger
                 use_neural = True
-            elif avg_stability > 0.98:
+            elif avg_stability > 0.9:
                 use_neural = False
-        use_neural = True  # Force neural controller for demo
         
         if use_neural:
             corner_leg_angles = nn_controller.predict(state)
@@ -241,8 +242,6 @@ def run_neural_demo(env, robot):
             for idx, leg_idx in enumerate(corner_legs):
                 target_angles[leg_idx] = corner_leg_angles[idx*3:(idx+1)*3]
         else:
-            locomotion = LocomotionGenerator(robot)
-            locomotion.define_tripod_gait()
             target_angles = locomotion.get_next_angles()
         
         robot.set_target_angles(target_angles)
