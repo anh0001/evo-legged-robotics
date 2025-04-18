@@ -71,6 +71,8 @@ def run_demo(gait_type="tripod"):
         # Apply to robot
         robot.set_target_angles(angles)
         
+        robot.apply_target_angles()
+
         # Step simulation
         env.step()
         
