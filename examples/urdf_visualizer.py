@@ -17,8 +17,8 @@ if not os.path.exists(URDF_PATH):
     urdf_content = generate_urdf()
     save_urdf(urdf_content)
 
-# Connect to PyBullet in GUI mode
-client = p.connect(p.GUI)
+# Connect to PyBullet in GUI mode with the OpenGL renderer option
+client = p.connect(p.GUI, options="--renderer=opengl")
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
 # Set up camera
@@ -79,19 +79,24 @@ for i in range(p.getNumJoints(robot_id)):
         joint_sliders.append((i, slider_id))
 
 print(f"Created {len(joint_sliders)} joint control sliders")
+time.sleep(1.0)  # Added delay to ensure GUI initialization
 
 # Main loop
 for _ in range(10000):  # Run for 10000 steps
     # Update joint positions from sliders
     for joint_idx, slider_id in joint_sliders:
-        angle = p.readUserDebugParameter(slider_id)
-        p.setJointMotorControl2(
-            bodyUniqueId=robot_id,
-            jointIndex=joint_idx,
-            controlMode=p.POSITION_CONTROL,
-            targetPosition=angle,
-            force=5.0
-        )
+        try:
+            angle = p.readUserDebugParameter(slider_id)
+            p.setJointMotorControl2(
+                bodyUniqueId=robot_id,
+                jointIndex=joint_idx,
+                controlMode=p.POSITION_CONTROL,
+                targetPosition=angle,
+                force=5.0
+            )
+        except Exception as e:
+            # Skip this slider if it can't be read
+            continue
     
     # Step simulation
     p.stepSimulation()
