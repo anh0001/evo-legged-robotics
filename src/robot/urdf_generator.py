@@ -160,7 +160,7 @@ def generate_urdf():
                 # First segment for each leg connects to the dummy leg
                 parent_link = f"dummy_leg_{leg_group}"
                 joint_type = "revolute"
-                joint_axis = "0 1 0"  # Rotate around y-axis (horizontal)
+                joint_axis = "0 -1 0"  # Rotate around y-axis (horizontal)
                 dummy_index = leg_group
                 
                 # Position relative to the dummy leg
