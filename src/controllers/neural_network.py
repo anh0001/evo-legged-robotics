@@ -92,29 +92,27 @@ class NeuralController:
     def _preprocess_input(self, state):
         """
         Preprocess the input state for the neural network.
+        Following the C++ implementation which uses 4 legs + orientation.
         
         Args:
             state: Raw robot state
-            
+        
         Returns:
-            Processed input vector
+            Processed input vector of length 15
         """
-        # Extract relevant information from state
         x = np.zeros(self.input_dim)
+        # Select the specific legs to use (corner legs: 0, 2, 3, 5)
+        legs_to_use = [0, 2, 3, 5]
         
-        # First 12 inputs are the current joint angles for 4 legs (3 DOF each)
-        # Get joint angles from the first 4 legs
-        for i in range(4):
-            for j in range(3):
-                if 'joint_angles' in state:
-                    x[i*3 + j] = self._sigmoid(state['joint_angles'][i, j])
+        # First 12 inputs: joint angles for the 4 legs (3 DOF each)
+        for idx, leg_idx in enumerate(legs_to_use):
+            if 'joint_angles' in state:
+                x[idx*3:idx*3+3] = [self._sigmoid(angle) for angle in state['joint_angles'][leg_idx]]
         
-        # Last 3 inputs are the robot's orientation (vertical direction)
+        # Last 3 inputs: robot orientation (z-axis from rotation matrix)
         if 'rotation_matrix' in state:
             rot_matrix = state['rotation_matrix']
-            # Extract the vertical direction (z-axis in world frame)
-            for i in range(3):
-                x[12 + i] = self._sigmoid(rot_matrix[i*3 + 2])  # z-component (3rd column)
+            x[12:15] = [self._sigmoid(rot_matrix[8]), self._sigmoid(rot_matrix[9]), self._sigmoid(rot_matrix[10])]
         
         return x
     
