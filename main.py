@@ -99,57 +99,47 @@ def run_standard_demo(env, robot):
 def run_evolution_demo(env, robot):
     """
     Run a demonstration with evolutionary algorithm.
-    
-    Args:
-        env: Simulation environment
-        robot: Robot instance
     """
-    # Check if we have a pre-trained controller
+    # Initialize VEGA with realistic parameters for continuous evolution
+    vega = VEGA(
+        population_size=30,      # Updated population size to match GAN=30
+        chromosome_length=10,    # Updated chromosome length
+        generations=100          # Updated minimum generations
+    )
+
     model_path = "models/evolved_controller.pkl"
     
     if os.path.exists(model_path):
         print(f"Loading pre-trained evolutionary controller from {model_path}")
-        # Load controller
-        import pickle
         with open(model_path, 'rb') as f:
             controller = pickle.load(f)
+        locomotion = LocomotionGenerator(robot)
+        locomotion.set_sequence_controller(controller)
     else:
-        print("No pre-trained controller found. Training for a short period...")
-        # Create a VEGA instance with small population and generations for demo
-        vega = VEGA(
-            population_size=5,  # Small population for demo
-            chromosome_length=3,
-            generations=3  # Just a few generations for demo
-        )
-        
-        # Create training environment
-        train_env = TrainingEnvironment(render=False)
-        
-        # Train for a few generations
-        controller = vega.train(robot, train_env, parallel=False)
-        
-        # Save controller
+        print("No pre-trained controller found. Training with continuous evolution...")
+        locomotion = LocomotionGenerator(robot)
+        # Initial training phase (one evolution run)
+        controller = vega.train(robot, TrainingEnvironment(render=False), parallel=False)
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         with open(model_path, 'wb') as f:
             pickle.dump(controller, f)
-    
-    # Create a locomotion generator using the evolved controller
-    locomotion = LocomotionGenerator(robot)
-    locomotion.set_sequence_controller(controller)
-    
-    # Run simulation with the evolved controller
-    for i in range(500):
-        # Get next locomotion step
+        locomotion.set_sequence_controller(controller)
+
+    iteration = 0
+    # Continuous evolution during simulation over 1000 steps
+    for i in range(1000):
+        if i % 50 == 0:
+            iteration += 1
+            obj_idx = iteration % 3  # Cycle: 0=forward, 1=left turn, 2=right turn
+            vega.generation = iteration
+            vega.current_objective = obj_idx  # Use this property in VEGA for multi-objective fitness
+            vega.evolve()
+            controller = vega.create_controller()
+            locomotion.set_sequence_controller(controller)
         angles = locomotion.get_next_angles()
-        
-        # Apply to robot
         robot.set_target_angles(angles)
         robot.apply_target_angles()
-        
-        # Step simulation
         env.step()
-        
-        # Print progress every 100 steps
         if i % 100 == 0:
             pos = robot.get_position()
             print(f"Step {i}: Robot position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f})")
