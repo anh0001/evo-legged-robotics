@@ -28,14 +28,16 @@ def run_demo(render=True, mode="standard"):
         mode: Which mode to run ("standard", "evolution", "neural", "adaptive")
     """
     print(f"Running {mode} demonstration...")
-    
-    # Create environment
+    # --- handle adaptive mode separately, it does its own setup ---
+    if mode == "adaptive":
+        run_adaptive_demo(render)
+        return
+
+    # Create environment and robot for all *other* modes
     env = Environment(render=render)
-    
-    # Create robot
     robot = LeggedRobot(client=env.client)
     env.add_robot(robot)
-    
+
     if mode == "standard":
         # Run with manually defined locomotion
         run_standard_demo(env, robot)
@@ -47,10 +49,6 @@ def run_demo(render=True, mode="standard"):
     elif mode == "neural":
         # Run with neural network control
         run_neural_demo(env, robot)
-    
-    elif mode == "adaptive":
-        # Run with adaptive control
-        run_adaptive_demo(env, robot)
     
     else:
         print(f"Unknown mode: {mode}")
@@ -254,17 +252,15 @@ def run_neural_demo(env, robot):
             print(f"Execution Step {i}: Robot position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), Neural: {use_neural}")
 
 
-def run_adaptive_demo(env, robot):
+def run_adaptive_demo(render=True):
     """
     Run a demonstration with adaptive control.
     
     Args:
-        env: Simulation environment
-        robot: Robot instance
+        render: Whether to render the simulation
     """
-    # Create a more challenging environment with obstacles
-    env.close()
-    env = Environment(render=True, terrain_type="rough")
+    # Adaptive mode: set up its own environment and robot
+    env = Environment(render=render, terrain_type="rough")
     robot = LeggedRobot(client=env.client)
     env.add_robot(robot)
     
