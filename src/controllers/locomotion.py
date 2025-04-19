@@ -227,6 +227,9 @@ class LocomotionGenerator:
         
         # Create target angles array
         angles = np.zeros((self.leg_count, self.dof))
+        # Clamp end-joint angles (DOF index 2) to safe range [0, 45°]
+        for leg in range(self.leg_count):
+            angles[leg, 2] = np.clip(angles[leg, 2], 0, math.radians(45))
         
         # Set target angles for each leg
         for leg in range(self.leg_count):

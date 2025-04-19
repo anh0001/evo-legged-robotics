@@ -395,19 +395,15 @@ class AdaptiveController:
         
         # Manually set target angles for legs based on current sequence position
         for leg in range(6):
+            leg_phase = 0 if leg % 2 == 0 else 1  # Even legs use phase 0, odd use phase 1
             for dof in range(3):
-                # Right side legs (first 3)
-                if leg < 3:
-                    if leg % 2 == 0:  # Even legs use phase 0
-                        angles[leg, dof] = -np.radians(seq[0, dof])
-                    else:  # Odd legs use phase 1
-                        angles[leg, dof] = -np.radians(seq[1, dof])
-                # Left side legs (last 3)
-                else:
-                    if leg % 2 == 0:  # Even legs use phase 0
-                        angles[leg, dof] = np.radians(seq[0, dof])
-                    else:  # Odd legs use phase 1
-                        angles[leg, dof] = np.radians(seq[1, dof])
+                if dof == 0:  # First DOF (leg angle) - no negation for any legs
+                    angles[leg, dof] = np.radians(seq[leg_phase, dof])
+                else:  # Other DOFs
+                    if leg < 3:  # Right side legs: negate angles for DOFs other than 0
+                        angles[leg, dof] = -np.radians(seq[leg_phase, dof])
+                    else:  # Left side legs: no negation
+                        angles[leg, dof] = np.radians(seq[leg_phase, dof])
         
         return angles.flatten()
     
