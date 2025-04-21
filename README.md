@@ -2,6 +2,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/downloads/)
 [![PyBullet](https://img.shields.io/badge/physics-PyBullet-green)](https://pybullet.org)
+[![TensorFlow](https://img.shields.io/badge/neural--network-TensorFlow-orange)](https://www.tensorflow.org)
 
 A Python implementation of evolutionary robotics for legged robots using the PyBullet physics engine. This repository contains code for developing and optimizing adaptive locomotion patterns using evolutionary algorithms and neural networks.
 
@@ -16,6 +17,7 @@ The robot model features a main body with multiple articulated legs, each with m
 - **Vector Evaluated Genetic Algorithm (VEGA)** for multi-objective optimization
 - **Steady-State Genetic Algorithm (SSGA)** for locomotion pattern evolution
 - **Neural network controllers** for adaptive locomotion on uneven terrain
+- **Leg height sensing** for terrain adaptation
 
 ## Features
 
@@ -24,12 +26,14 @@ The robot model features a main body with multiple articulated legs, each with m
 - Neural network-based adaptive controllers for rough terrain
 - Comprehensive fitness evaluation for different locomotion objectives
 - Visualization tools for analyzing robot motion and evolution progress
+- TensorBoard integration for neural network training analysis
+- Comprehensive logging and data collection
 
 ## Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/evo-legged-robotics.git
+git clone https://github.com/anh0001/evo-legged-robotics.git
 cd evo-legged-robotics
 
 # Create a conda environment in the ./env folder with Python 3.7+
@@ -49,8 +53,9 @@ pip install -e .
 - Python 3.7+
 - PyBullet
 - NumPy
-- TensorFlow or PyTorch (for neural network implementation)
-- Matplotlib (for visualization)
+- TensorFlow
+- Pandas
+- Matplotlib
 
 ## Usage Example
 
@@ -68,34 +73,75 @@ python main.py --mode neural
 
 # Run with adaptive control on rough terrain
 python main.py --mode adaptive
+
+# Run with neuro-evolutionary approach
+python main.py --mode neuro_evolutionary
+
+# Run with neural-adaptive terrain approach
+python main.py --mode neuro_adaptive_terrain
 ```
 
-This implementation should provide researchers and developers with a modern, flexible framework for experimenting with evolutionary robotics and legged locomotion.
+### Mode Descriptions
+
+- **standard**: Uses predefined locomotion patterns  
+- **evolution**: Uses Vector Evaluated Genetic Algorithm (VEGA) for locomotion optimization  
+- **neural**: Uses neural network for adaptive control  
+- **adaptive**: Combines sequence-based locomotion with neural adaptation  
+- **neuro_evolutionary**: Combines neural and evolutionary approaches  
+- **neuro_adaptive_terrain**: Neural network adaptation based on leg heights for terrain sensing  
+
+## Neuro-Adaptive Terrain Mode
+
+The `neuro_adaptive_terrain` mode implements a sophisticated neural network-based approach for legged robot locomotion that can adapt to different terrains using leg height sensing. Key features include:
+
+- Two-layer neural network with sigmoid activation for joint angle control  
+- Leg height sensing to detect and adapt to uneven terrain  
+- Incremental learning based on vertical orientation improvement  
+- Dataset management for storing and replacing training examples  
+- TensorBoard integration for visualizing training progress  
+- Comprehensive data logging using Pandas DataFrames and CSV files  
+
+### Logging and Visualization
+
+Training data and visualizations are stored in the `logs/neuro_adaptive_terrain` directory:
+
+- **TensorBoard logs**: View with `tensorboard --logdir=logs/neuro_adaptive_terrain`  
+- **CSV files**: Training data saved for external analysis  
+- **PNG plots**: Generated visualizations of training progress  
+- **Log files**: Detailed execution logs  
 
 ## Quick Start
 
 ```python
 from evo_legged_robotics.simulation import Environment
 from evo_legged_robotics.robot import LeggedRobot
-from evo_legged_robotics.controllers import NeuralController
+from evo_legged_robotics.controllers import NeuroAdaptiveTerrainController
 
 # Create simulation environment
-env = Environment(render=True)
+env = Environment(render=True, terrain_type="obstacles")
 
 # Initialize robot with default parameters
 robot = LeggedRobot()
 env.add_robot(robot)
 
-# Load a pre-trained controller
-controller = NeuralController.load('models/pretrained_controller.pkl')
+# Create controller
+controller = NeuroAdaptiveTerrainController()
 
 # Run simulation
 for i in range(1000):
-    actions = controller.get_actions(robot.get_state())
-    env.step(actions)
+    # Get current state with leg positions
+    state = get_extended_state(robot)
     
-    if i % 100 == 0:
-        print(f"Step {i}: Robot position: {robot.get_position()}")
+    # Get actions from controller
+    actions = controller.get_actions(state)
+    
+    # Apply to robot and step simulation
+    robot.set_target_angles(actions)
+    robot.apply_target_angles()
+    env.step()
+    
+    # Learn from experience when orientation improves
+    controller.learn(state)
 ```
 
 ## Evolution Training
@@ -139,6 +185,7 @@ vega.plot_fitness_history()
 - `src/simulation/` - PyBullet environment and visualization
 - `examples/` - Example scripts for various scenarios
 - `docs/` - Documentation and resources
+- `logs/` - Training logs, visualizations, and data
 
 ## Background
 

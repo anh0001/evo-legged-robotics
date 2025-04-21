@@ -11,10 +11,15 @@ import time
 import pickle
 
 import pybullet as p
+import logging
+from datetime import datetime
+import pandas as pd
+import matplotlib.pyplot as plt
 
 from src.robot.leg_robot import LeggedRobot
 from src.simulation.environment import Environment, TrainingEnvironment
 from src.controllers.neural_network import NeuralController, AdaptiveController
+from src.controllers.neuro_adaptive_terrain import NeuroAdaptiveTerrainController
 from src.controllers.neuro_evolutionary import NeuroEvolutionaryController
 from src.evolution.vega import VEGA
 from src.controllers.locomotion import LocomotionGenerator
@@ -418,20 +423,120 @@ def run_neuro_evolutionary_demo(render=True):
         print(f"Average stability (vertical orientation): {avg_stability:.4f}")
 
 
+def run_neuro_adaptive_terrain_demo(render=True, log_dir=None):
+    """
+    Run a demonstration of neural-adaptive terrain locomotion with leg height sensing.
+    """
+    # allow user to override log directory
+    if log_dir is None:
+        log_dir = os.path.join('logs', 'neuro_adaptive_terrain', datetime.now().strftime("%Y%m%d-%H%M%S"))
+    os.makedirs(log_dir, exist_ok=True)
+    logger = logging.getLogger('neuro_adaptive_terrain')
+    logger.setLevel(logging.INFO)
+    fh = logging.FileHandler(os.path.join(log_dir, 'demo.log'))
+    fh.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh.setFormatter(fmt)
+    ch.setFormatter(fmt)
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+    logger.info("Starting neuro-adaptive terrain locomotion demonstration...")
+
+    env = Environment(render=render, terrain_type="obstacles")
+    robot = LeggedRobot(client=env.client)
+    env.add_robot(robot)
+    model_path = "models/neuro_adaptive_terrain_controller"
+    if os.path.exists(model_path + ".pkl"):
+        logger.info(f"Loading pre-trained controller from {model_path}")
+        controller = NeuroAdaptiveTerrainController.load(model_path)
+    else:
+        logger.info("No pre-trained controller found. Creating a new one...")
+        controller = NeuroAdaptiveTerrainController(input_dim=15, hidden_dim=30, output_dim=12, log_dir=log_dir)
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        controller.save(model_path)
+
+    vel_counter = 0
+    sampling_steps = 50
+    learning_count = 0
+    total_reward = 0
+    stability_history = []
+    total_steps = 2000
+    for i in range(total_steps):
+        state = get_extended_state(robot)
+        vel_counter += 1
+        target_angles = controller.get_actions(state)
+        robot.set_target_angles(target_angles)
+        robot.apply_target_angles()
+        env.step()
+        if vel_counter % sampling_steps == 0:
+            vel_counter = 0
+            loss = controller.learn(state)
+            if loss > 0:
+                learning_count += 1
+                if i % 100 == 0:
+                    logger.info(f"Step {i}/{total_steps} - Learning event #{learning_count}, Loss: {loss:.6f}")
+        if 'rotation_matrix' in state:
+            rot = np.array(state['rotation_matrix']).reshape(3, 3)
+            stability_history.append(rot[2, 2])
+        if i > 0:
+            prev = np.array(state['position'])
+            curr = np.array(robot.get_position())
+            total_reward += np.linalg.norm(curr - prev)
+        if i % 100 == 0 or i == total_steps - 1:
+            pos = robot.get_position()
+            logger.info(f"Step {i}/{total_steps}: Position: ({pos[0]:.2f},{pos[1]:.2f},{pos[2]:.2f}), Total Reward: {total_reward:.2f}, Using Neural: {controller.use_neural}")
+
+    controller.save(model_path)
+    controller.plot_training_history()
+    stability_df = pd.DataFrame({'steps': range(len(stability_history)), 'stability': stability_history})
+    stability_df.to_csv(os.path.join(log_dir, 'stability_history.csv'), index=False)
+    plt.figure(figsize=(10, 6))
+    plt.plot(stability_df['steps'], stability_df['stability'])
+    plt.grid(True)
+    plt.xlabel('Step')
+    plt.ylabel('Vertical Stability')
+    plt.title('Robot Stability Throughout Simulation')
+    plt.savefig(os.path.join(log_dir, 'stability_history.png'))
+    plt.close()
+    env.close()
+    logger.info(f"Demo completed: Learning events={learning_count}, Total reward={total_reward:.2f}, Avg stability={(sum(stability_history) / len(stability_history)):.4f}")
+    logger.info(f"All data saved to: {log_dir}")
+    return log_dir
+
+
+def get_extended_state(robot):
+    """Get extended state including leg positions for height sensing."""
+    state = robot.get_state()
+    leg_positions = []
+    for lg in range(robot.leg_count):
+        if lg in robot.leg_joints:
+            ji = robot.leg_joints[lg][-1]
+            link = p.getLinkState(robot.body_id, ji)
+            leg_positions.append(link[0])
+    state['leg_positions'] = leg_positions
+    return state
+
+
 def main():
     """Main entry point."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Evolutionary Legged Robotics Demo")
     parser.add_argument("--mode", type=str, default="standard",
-                        choices=["standard", "evolution", "neural", "adaptive", "neuro_evolutionary"],
+                        choices=["standard", "evolution", "neural", "adaptive",
+                                  "neuro_evolutionary", "neuro_adaptive_terrain"],
                         help="Which mode to run")
     parser.add_argument("--no-render", action="store_true",
                         help="Disable rendering for faster simulation")
+    parser.add_argument("--log-dir", type=str, default=None,
+                        help="Directory to save logs (defaults to logs/MODE/TIMESTAMP)")
     
     args = parser.parse_args()
     
-    # Run the demo based on selected mode
-    if args.mode == "neuro_evolutionary":
+    if args.mode == "neuro_adaptive_terrain":
+        run_neuro_adaptive_terrain_demo(render=not args.no_render, log_dir=args.log_dir)
+    elif args.mode == "neuro_evolutionary":
         run_neuro_evolutionary_demo(render=not args.no_render)
     else:
         run_demo(render=not args.no_render, mode=args.mode)
