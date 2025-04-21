@@ -4,17 +4,18 @@ Main entry point for the evolutionary legged robotics simulation.
 This script demonstrates how to use the various components.
 """
 
+import os
+import numpy as np
 import argparse
 import time
-import os
 import pickle
-import numpy as np
 
 import pybullet as p
 
 from src.robot.leg_robot import LeggedRobot
 from src.simulation.environment import Environment, TrainingEnvironment
 from src.controllers.neural_network import NeuralController, AdaptiveController
+from src.controllers.neuro_evolutionary import NeuroEvolutionaryController
 from src.evolution.vega import VEGA
 from src.controllers.locomotion import LocomotionGenerator
 
@@ -326,20 +327,114 @@ def run_adaptive_demo(render=True):
             print(f"Step {i}: Robot position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), Reward: {total_reward:.2f}")
 
 
+def run_neuro_evolutionary_demo(render=True):
+    """
+    Run a demonstration with integrated neural-evolutionary control.
+    This implements the approach from main04.cpp with:
+    - Neural network adaptation based on vertical orientation
+    - 5x5 grid of obstacle boxes
+    - Integrated learning between evolutionary and neural approaches
+    
+    Args:
+        render: Whether to render the simulation
+    """
+    # Create environment with obstacles
+    env = Environment(render=render, terrain_type="obstacles")
+    robot = LeggedRobot(client=env.client)
+    env.add_robot(robot)
+    
+    # Check if we have a pre-trained controller
+    model_path = "models/neuro_evolutionary_controller"
+    
+    if os.path.exists(model_path + ".pkl"):
+        print(f"Loading pre-trained neuro-evolutionary controller from {model_path}")
+        # Load controller
+        ne_controller = NeuroEvolutionaryController.load(model_path)
+    else:
+        print("No pre-trained controller found. Creating a new one...")
+        # Create neural-evolutionary controller with dimensions matching main04.cpp
+        ne_controller = NeuroEvolutionaryController(input_dim=15, hidden_dim=20, output_dim=12)
+        # Save controller
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        ne_controller.save(model_path)
+    
+    # Initialize tracking variables
+    learning_count = 0
+    total_reward = 0
+    stability_history = []
+    
+    # Run simulation
+    for i in range(1000):
+        # Get current state
+        state = robot.get_state()
+        
+        # Get target angles from controller
+        target_angles = ne_controller.get_actions(state)
+        
+        # Apply to robot
+        robot.set_target_angles(target_angles)
+        robot.apply_target_angles()
+        
+        # Step simulation
+        env.step()
+        
+        # Learn from experience
+        if ne_controller.should_learn():
+            loss = ne_controller.learn(state)
+            learning_count += 1
+            if i % 50 == 0:
+                print(f"Learning event #{learning_count}, Loss: {loss:.6f}")
+        
+        # Track stability (vertical orientation)
+        if 'rotation_matrix' in state:
+            rot_matrix = np.array(state['rotation_matrix']).reshape(3, 3)
+            stability = rot_matrix[2, 2]  # z-component of z-axis (vertical)
+            stability_history.append(stability)
+        
+        # Calculate reward (simple distance metric)
+        if i > 0:
+            prev_pos = np.array(state['position'])
+            curr_pos = np.array(robot.get_position())
+            reward = np.sqrt((curr_pos[0] - prev_pos[0])**2 + (curr_pos[1] - prev_pos[1])**2)
+            total_reward += reward
+        
+        # Print progress every 100 steps
+        if i % 100 == 0:
+            pos = robot.get_position()
+            print(f"Step {i}: Robot position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), "
+                  f"Total Reward: {total_reward:.2f}, "
+                  f"Using Neural: {ne_controller.use_neural}")
+    
+    # Save the trained controller
+    ne_controller.save(model_path)
+    
+    # Close environment
+    env.close()
+    
+    # Print summary
+    print(f"Demo completed. Learning events: {learning_count}, Total reward: {total_reward:.2f}")
+    if stability_history:
+        avg_stability = sum(stability_history) / len(stability_history)
+        print(f"Average stability (vertical orientation): {avg_stability:.4f}")
+
+
 def main():
     """Main entry point."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Evolutionary Legged Robotics Demo")
     parser.add_argument("--mode", type=str, default="standard",
-                      choices=["standard", "evolution", "neural", "adaptive"],
-                      help="Which mode to run")
+                        choices=["standard", "evolution", "neural", "adaptive", "neuro_evolutionary"],
+                        help="Which mode to run")
     parser.add_argument("--no-render", action="store_true",
-                      help="Disable rendering for faster simulation")
+                        help="Disable rendering for faster simulation")
     
     args = parser.parse_args()
     
-    # Run the demo
-    run_demo(render=not args.no_render, mode=args.mode)
+    # Run the demo based on selected mode
+    if args.mode == "neuro_evolutionary":
+        run_neuro_evolutionary_demo(render=not args.no_render)
+    else:
+        run_demo(render=not args.no_render, mode=args.mode)
 
 
 if __name__ == "__main__":

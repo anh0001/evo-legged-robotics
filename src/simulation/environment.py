@@ -46,13 +46,13 @@ class Environment:
         # Add data path for URDF models
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         
-        # Create ground
-        self.terrain_type = terrain_type
-        self.ground_id = self._create_terrain(terrain_type)
-        
         # Store robot IDs
         self.robot_id = None
         self.objects = []
+        
+        # Create ground
+        self.terrain_type = terrain_type
+        self.ground_id = self._create_terrain(terrain_type)
         
         # Set up camera
         self._setup_camera()
@@ -147,7 +147,8 @@ class Environment:
     
     def _add_obstacles(self, num_obstacles=25):
         """
-        Add obstacles to the environment.
+        Add obstacles to the environment in a 5x5 grid pattern with randomization.
+        This replicates the obstacle configuration from main04.cpp.
         
         Args:
             num_obstacles: Number of obstacles to add
@@ -170,7 +171,7 @@ class Environment:
                 vis_id = p.createVisualShape(
                     p.GEOM_BOX,
                     halfExtents=[box_length/2, box_width/2, box_height/2],
-                    rgbaColor=[1.0, 0.0, 1.0, 1.0]
+                    rgbaColor=[1.0, 0.0, 1.0, 1.0]  # Pink color as in main04.cpp
                 )
                 
                 # Create multibody
@@ -179,7 +180,7 @@ class Environment:
                 z = box_height / 2
                 
                 obstacle_id = p.createMultiBody(
-                    baseMass=0,  # Static obstacle
+                    baseMass=1.0,  # 1.0 mass as in main04.cpp (box_mass=1)
                     baseCollisionShapeIndex=col_id,
                     baseVisualShapeIndex=vis_id,
                     basePosition=[x, y, z]
