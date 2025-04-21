@@ -59,9 +59,7 @@ pip install -e .
 
 ## Usage Example
 
-The main.py script demonstrates how to use the library:
-
-```python
+```bash
 # Run with standard locomotion
 python main.py --mode standard
 
@@ -79,6 +77,9 @@ python main.py --mode neuro_evolutionary
 
 # Run with neural-adaptive terrain approach
 python main.py --mode neuro_adaptive_terrain
+
+# Run with integrated mode (evolution + neural integration)
+python main.py --mode integrated
 ```
 
 ### Mode Descriptions
@@ -89,6 +90,7 @@ python main.py --mode neuro_adaptive_terrain
 - **adaptive**: Combines sequence-based locomotion with neural adaptation  
 - **neuro_evolutionary**: Combines neural and evolutionary approaches  
 - **neuro_adaptive_terrain**: Neural network adaptation based on leg heights for terrain sensing  
+- **integrated**: Full integration of evolutionary algorithms and neural adaptation in a single control loop  
 
 ## Neuro-Adaptive Terrain Mode
 

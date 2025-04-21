@@ -506,6 +506,157 @@ def run_neuro_adaptive_terrain_demo(render=True, log_dir=None):
     return log_dir
 
 
+def run_integrated_demo(render=True):
+    """
+    Run a demonstration using the integrated controller that combines evolutionary 
+    algorithms with neural network learning for adaptation to rough terrain.
+    This implements the comprehensive approach from main06.cpp.
+
+    Args:
+        render: Whether to render the simulation
+    """
+    from src.controllers.integrated import IntegratedController
+
+    # Create environment with obstacles (like in main06.cpp)
+    env = Environment(render=render, terrain_type="obstacles")
+    robot = LeggedRobot(client=env.client)
+    env.add_robot(robot)
+    
+    # Create or load integrated controller
+    model_path = "models/integrated_controller"
+    
+    if os.path.exists(model_path + ".params.pkl"):
+        print(f"Loading pre-trained integrated controller from {model_path}")
+        controller = IntegratedController.load(model_path)
+    else:
+        print("No pre-trained controller found. Creating a new one...")
+        controller = IntegratedController(input_dim=15, hidden_dim=30, output_dim=12)
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        controller.save(model_path)
+    
+    # Setup data collection
+    vel_counter = 0
+    sampling_steps = 50  # Same as in main06.cpp
+    learning_count = 0
+    total_reward = 0
+    stability_history = []
+    total_steps = 2000
+    
+    # Initial robot position and orientation for calculating fitness
+    prev_pos = np.array(robot.get_position())
+    prev_orientation = 0
+    
+    # Run simulation loop
+    for i in range(total_steps):
+        # Get extended state including leg positions for height sensing
+        state = get_extended_state(robot)
+        
+        # Increment velocity counter (used for learning timing)
+        vel_counter += 1
+        
+        # Get target angles from controller
+        target_angles = controller.get_actions(state)
+        
+        # Apply to robot
+        robot.set_target_angles(target_angles)
+        robot.apply_target_angles()
+        
+        # Step simulation
+        env.step()
+        
+        # Learn from experience at regular intervals
+        if vel_counter % sampling_steps == 0:
+            vel_counter = 0
+            
+            # Calculate fitness metrics for evolutionary algorithm
+            curr_pos = np.array(robot.get_position())
+            curr_rot_matrix = np.array(state['rotation_matrix']).reshape(3, 3)
+            
+            # Extract current orientation angle (yaw)
+            curr_orientation = np.arctan2(curr_rot_matrix[1, 0], curr_rot_matrix[0, 0])
+            
+            # Calculate displacement and angle change
+            displacement = curr_pos - prev_pos
+            distance = np.sqrt(displacement[0]**2 + displacement[1]**2)
+            
+            # Calculate angle change
+            angle_change = curr_orientation - prev_orientation
+            # Adjust to range [-pi, pi]
+            if angle_change > np.pi:
+                angle_change -= 2 * np.pi
+            elif angle_change < -np.pi:
+                angle_change += 2 * np.pi
+                
+            # Calculate direction alignment
+            alignment = 0
+            if distance > 0:
+                forward_vec = np.array([curr_rot_matrix[0, 0], curr_rot_matrix[1, 0]])
+                direction_vec = displacement[:2] / np.linalg.norm(displacement[:2])
+                alignment = np.dot(forward_vec, direction_vec)
+            
+            # Update fitness in controller
+            controller.evaluate_fitness(robot, distance, angle_change, alignment)
+            
+            # Learn from current state
+            loss = controller.learn(state)
+            if loss > 0:
+                learning_count += 1
+                if i % 100 == 0:
+                    print(f"Step {i}/{total_steps} - Learning event #{learning_count}, Loss: {loss:.6f}")
+            
+            # Update previous position and orientation for next evaluation
+            prev_pos = curr_pos
+            prev_orientation = curr_orientation
+        
+        # Track stability (vertical orientation)
+        if 'rotation_matrix' in state:
+            rot = np.array(state['rotation_matrix']).reshape(3, 3)
+            stability_history.append(rot[2, 2])
+        
+        # Calculate reward (distance traveled)
+        if i > 0:
+            prev = np.array(state['position'])
+            curr = np.array(robot.get_position())
+            reward = np.linalg.norm(curr[:2] - prev[:2])  # xy-plane distance
+            total_reward += reward
+        
+        # Print progress periodically
+        if i % 100 == 0 or i == total_steps - 1:
+            pos = robot.get_position()
+            print(f"Step {i}/{total_steps}: Position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), "
+                  f"Total Reward: {total_reward:.2f}, Using Neural: {controller.use_neural}")
+    
+    # Save the trained controller
+    controller.save(model_path)
+    
+    # Generate visualization
+    controller.plot_training_history()
+    
+    # Save stability history
+    stability_df = pd.DataFrame({'steps': range(len(stability_history)), 'stability': stability_history})
+    stability_df.to_csv(os.path.join(controller.log_dir, 'stability_history.csv'), index=False)
+    
+    # Plot stability history
+    plt.figure(figsize=(10, 6))
+    plt.plot(stability_df['steps'], stability_df['stability'])
+    plt.grid(True)
+    plt.xlabel('Step')
+    plt.ylabel('Vertical Stability')
+    plt.title('Robot Stability Throughout Simulation')
+    plt.savefig(os.path.join(controller.log_dir, 'stability_history.png'))
+    plt.close()
+    
+    # Close environment
+    env.close()
+    
+    # Print summary
+    print(f"Demo completed: Learning events={learning_count}, Total reward={total_reward:.2f}, "
+          f"Avg stability={(sum(stability_history) / len(stability_history)):.4f}")
+    print(f"All data saved to: {controller.log_dir}")
+    
+    return controller.log_dir
+
+
 def get_extended_state(robot):
     """Get extended state including leg positions for height sensing."""
     state = robot.get_state()
@@ -525,7 +676,7 @@ def main():
     parser = argparse.ArgumentParser(description="Evolutionary Legged Robotics Demo")
     parser.add_argument("--mode", type=str, default="standard",
                         choices=["standard", "evolution", "neural", "adaptive",
-                                  "neuro_evolutionary", "neuro_adaptive_terrain"],
+                                 "neuro_evolutionary", "neuro_adaptive_terrain", "integrated"],
                         help="Which mode to run")
     parser.add_argument("--no-render", action="store_true",
                         help="Disable rendering for faster simulation")
@@ -534,7 +685,9 @@ def main():
     
     args = parser.parse_args()
     
-    if args.mode == "neuro_adaptive_terrain":
+    if args.mode == "integrated":
+        run_integrated_demo(render=not args.no_render)
+    elif args.mode == "neuro_adaptive_terrain":
         run_neuro_adaptive_terrain_demo(render=not args.no_render, log_dir=args.log_dir)
     elif args.mode == "neuro_evolutionary":
         run_neuro_evolutionary_demo(render=not args.no_render)
