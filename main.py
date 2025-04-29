@@ -99,55 +99,187 @@ def run_standard_demo(env, robot):
             if env.client == p.GUI:
                 time.sleep(0.01)
 
-
 def run_evolution_demo(env, robot):
     """
     Run a demonstration with evolutionary algorithm.
+    This version closely follows the implementation in main.cpp.
     """
-    # Initialize VEGA with realistic parameters for continuous evolution
+    # Initialize VEGA with parameters matching the C++ implementation
     vega = VEGA(
-        population_size=30,      # Updated population size to match GAN=30
-        chromosome_length=10,    # Updated chromosome length
-        generations=100          # Updated minimum generations
+        population_size=30,      # GAN=30 in C++
+        chromosome_length=10     # GAL=10 in C++
     )
 
-    model_path = "models/evolved_controller.pkl"
+    # Parameters for locomotion control from C++ (exact values)
+    times = 0
+    timesmax = 20     # Steps per sequence position
+    vel_counter = 0
+    sampling_steps = 20   # Sampling steps for feedback (samstep in C++)
+    gain = 5.0        # Control gain for motors
     
-    if os.path.exists(model_path):
-        print(f"Loading pre-trained evolutionary controller from {model_path}")
-        with open(model_path, 'rb') as f:
-            controller = pickle.load(f)
-        locomotion = LocomotionGenerator(robot)
-        locomotion.set_sequence_controller(controller)
-    else:
-        print("No pre-trained controller found. Training with continuous evolution...")
-        locomotion = LocomotionGenerator(robot)
-        # Initial training phase (one evolution run)
-        controller = vega.train(robot, TrainingEnvironment(render=False), parallel=False)
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        with open(model_path, 'wb') as f:
-            pickle.dump(controller, f)
-        locomotion.set_sequence_controller(controller)
-
-    iteration = 0
-    # Continuous evolution during simulation over 1000 steps
-    for i in range(1000):
-        if i % 50 == 0:
-            iteration += 1
-            obj_idx = iteration % 3  # Cycle: 0=forward, 1=left turn, 2=right turn
-            vega.generation = iteration
-            vega.current_objective = obj_idx  # Use this property in VEGA for multi-objective fitness
-            vega.evolve()
-            controller = vega.create_controller()
-            locomotion.set_sequence_controller(controller)
-        angles = locomotion.get_next_angles()
+    # Store previous state for fitness evaluation
+    prev_pos = np.array(robot.get_position())
+    prev_state = robot.get_state()
+    prev_rot_matrix = np.array(prev_state['rotation_matrix']).reshape(3, 3)
+    
+    # Initialize positions for visualization tracking
+    # This mimics the position tracking in the original C++ code
+    xyz = np.zeros(3)
+    xyz2 = np.array([0.8317, -2.9817, 2.0])
+    
+    # Initialize current individual and sequence position
+    vega.gai = 0   # Current individual ID
+    vega.gaj = -1  # Current sequence position (will increment to 0)
+    vega.iteration = 0  # Current iteration
+    
+    # Command keys (mimics keyboard input in C++)
+    ERmode = 0  # 0: all, 1:Forward, 2:Right Forward, 3:Right
+    vega.ERmode = ERmode
+    
+    # Maximum iterations for the demo
+    max_iterations = 1000
+    
+    print("Starting evolution demo with VEGA...")
+    
+    # Initial angles (matching original C++)
+    angles = np.zeros((6, 3))
+    for i in range(6):
+        for j in range(3):
+            if i < 3:  # Right side legs
+                angles[i, j] = -np.radians(vega.q_init[j])
+            else:      # Left side legs
+                angles[i, j] = np.radians(vega.q_init[j])
+    
+    # Set initial angles on robot
+    robot.set_target_angles(angles)
+    robot.apply_target_angles()
+    
+    # Main simulation loop
+    for i in range(max_iterations):
+        # Increment time counter
+        times += 1
+        vel_counter += 1
+        
+        # Check if it's time to evaluate fitness and update sequence
+        if times > timesmax:
+            # Get current robot state for fitness calculation
+            curr_pos = np.array(robot.get_position())
+            curr_state = robot.get_state()
+            curr_rot_matrix = np.array(curr_state['rotation_matrix']).reshape(3, 3)
+            
+            # Calculate fitness
+            vega.evaluate_fitness(
+                robot, 
+                prev_pos, curr_pos,
+                prev_rot_matrix, curr_rot_matrix
+            )
+            
+            # Update position tracking for camera (matching C++)
+            for i in range(2):
+                xyz[i] += curr_pos[i] - prev_pos[i]
+                
+            # Update camera based on view mode (matching C++)
+            xyz2[0] = xyz[0] + 0.8317
+            xyz2[1] = xyz[1] - 2.9817
+            xyz2[2] = 2.0
+            
+            if env.client == p.GUI:
+                env.cam_target_pos = [xyz[0], xyz[1], 0.5]
+                env.update_camera()
+            
+            # Update stored state for next evaluation
+            prev_pos = curr_pos.copy()
+            prev_rot_matrix = curr_rot_matrix.copy()
+            
+            # Move to next iteration
+            vega.iteration += 1
+            
+            # If iterations >= GAN, evolve the population
+            if vega.iteration >= vega.gan:
+                vega.evolve()
+                
+            # Reset target angles to defaults
+            for i in range(6):
+                for j in range(3):
+                    if i < 3:  # Right side
+                        angles[i, j] = -np.radians(vega.q_init[j])
+                    else:      # Left side
+                        angles[i, j] = np.radians(vega.q_init[j])
+                        
+            # Reset sequence position
+            vega.gaj = -1
+            times = 0
+            
+            # Print status
+            print(f"Iterations: {vega.iteration}, host: {vega.gai}")
+            
+            # Save data occasionally
+            if vega.iteration > 0 and vega.iteration % 100 == 0:
+                vega.save_data()
+        else:
+            # Update sequence position
+            if vega.gaj < 0:
+                vega.gaj = 0
+            else:
+                vega.gaj = (vega.gaj + 1) % vega.host_lengths[vega.gai]
+                
+            # Get target angles from current sequence position
+            for i in range(6):  # 6 legs
+                for j in range(3):  # 3 DOF
+                    # Set angles based on current individual and sequence position
+                    if j == 0:  # First DOF (leg angle)
+                        phase = 0 if i % 2 == 0 else 1  # Alternating phases
+                        angles[i, j] = np.radians(vega.hosts[vega.gai, vega.gaj, phase, j])
+                    else:  # Other DOFs (middle and end joints)
+                        phase = 0 if i % 2 == 0 else 1
+                        # Apply signs based on which side of the robot
+                        if i < 3:  # Right side
+                            angles[i, j] = -np.radians(vega.hosts[vega.gai, vega.gaj, phase, j])
+                        else:  # Left side
+                            angles[i, j] = np.radians(vega.hosts[vega.gai, vega.gaj, phase, j])
+                            
+        # Apply angles to robot
         robot.set_target_angles(angles)
+        
+        # Calculate joint velocities based on current angles vs target angles
+        if vel_counter % 2 == 0:
+            for i in range(6):
+                for j in range(3):
+                    k = i*3 + j
+                    # Get current angle from robot
+                    curr_angle = robot.q_angle[i, j]
+                    # Calculate velocity based on error
+                    vel = gain * (angles[i, j] - curr_angle)
+                    # Apply velocity (handled internally in robot.apply_target_angles)
+            
+            # Check if it's time to update locomotion
+            if vel_counter % sampling_steps == 0:
+                vel_counter = 0
+        
+        # Apply target angles to robot
         robot.apply_target_angles()
+        
+        # Step the simulation
         env.step()
+        
+        # Print progress
         if i % 100 == 0:
             pos = robot.get_position()
             print(f"Step {i}: Robot position: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f})")
-
+            
+            # Optional pause for visualization
+            if env.client == p.GUI:
+                time.sleep(0.01)
+    
+    # Save final data
+    vega.save_data()
+    
+    # Create a controller from the best individual
+    controller = vega.create_controller()
+    
+    print("Evolution completed. Robot now using evolved controller.")
+    
+    return controller
 
 def run_neural_demo(env, robot):
     """
