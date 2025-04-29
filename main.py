@@ -113,10 +113,9 @@ def run_evolution_demo(env, robot):
     """
     print(f"Running evolution demonstration...")
     
-    # Initialize VEGA with parameters matching the C++ implementation
     vega = VEGA(
-        population_size=30,      # GAN=30 in C++
-        chromosome_length=10     # GAL=10 in C++
+        population_size=30,      # GAN=30
+        chromosome_length=10     # GAL=10
     )
     
     # Check if we should load from an existing checkpoint
@@ -127,11 +126,11 @@ def run_evolution_demo(env, robot):
         locomotion = LocomotionGenerator(robot)
         locomotion.set_sequence_controller(controller)
     else:
-        # Setup parameters for locomotion control from C++ (exact values)
+        # Setup parameters for locomotion control (exact values)
         times = 0
         timesmax = 20     # Steps per sequence position
         vel_counter = 0
-        sampling_steps = 20   # Sampling steps for feedback (samstep in C++)
+        sampling_steps = 20   # Sampling steps for feedback
         gain = 5.0        # Control gain for motors
         
         # Store previous state for fitness evaluation
@@ -139,7 +138,7 @@ def run_evolution_demo(env, robot):
         prev_state = robot.get_state()
         prev_rot_matrix = np.array(prev_state['rotation_matrix']).reshape(3, 3)
         
-        # Set initial angles (matching original C++)
+        # Set initial angles
         angles = np.zeros((6, 3))
         for i in range(6):
             for j in range(3):
@@ -148,12 +147,12 @@ def run_evolution_demo(env, robot):
                 else:      # Left side legs
                     angles[i, j] = np.radians(vega.q_init[j])
         
-        # Set initial angles on robot
+        # Apply initial angles
         robot.set_target_angles(angles)
         robot.apply_target_angles()
         
         # Maximum iterations for the demo
-        max_iterations = 500
+        max_iterations = 5000
         
         # Main simulation loop
         for i in range(max_iterations):
