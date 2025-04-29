@@ -4,13 +4,18 @@ import pickle
 import os
 import time
 import math
+import logging
+import json
+from datetime import datetime
+import pandas as pd
 
 
 class VEGA:
     """
     Virus-Host coEvolutionary Genetic Algorithm (VEGA) implementation
     for multi-objective optimization of robot locomotion patterns.
-    This is a direct port of the C++ VEGA implementation from the original ODE codebase.
+    This is a direct port of the C++ VEGA implementation from the original ODE codebase,
+    updated with modern Python logging practices.
     """
     
     def __init__(self, population_size=30, chromosome_length=10, generations=500):
@@ -22,6 +27,12 @@ class VEGA:
             chromosome_length: Maximum length of locomotion sequences (GAL in C++)
             generations: Maximum number of generations to evolve
         """
+        # Setup experiment logging
+        self.experiment_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.log_dir = os.path.join('logs', 'evolution', self.experiment_id)
+        os.makedirs(self.log_dir, exist_ok=True)
+        self._setup_logging()
+        
         # Match parameters from C++ implementation
         self.gan = population_size    # Host population size (GAN=30)
         self.gav = 20                 # Virus population size (GAV=20)
@@ -70,6 +81,63 @@ class VEGA:
         # For current objective selection
         self.current_objective = None
         
+        # Create necessary directories for experiment data
+        os.makedirs(os.path.join(self.log_dir, 'models'), exist_ok=True)
+        os.makedirs(os.path.join(self.log_dir, 'checkpoints'), exist_ok=True)
+        os.makedirs(os.path.join(self.log_dir, 'data'), exist_ok=True)
+        os.makedirs(os.path.join(self.log_dir, 'plots'), exist_ok=True)
+        
+        # Save experiment configuration
+        self._save_config()
+        
+        self.logger.info(f"VEGA initialized with {self.gan} hosts, {self.gav} viruses, max sequence length {self.gal}")
+    
+    def _setup_logging(self):
+        """Set up proper logging configuration."""
+        self.logger = logging.getLogger('vega_evolution')
+        self.logger.setLevel(logging.INFO)
+        
+        # Clear any existing handlers
+        if self.logger.handlers:
+            self.logger.handlers.clear()
+        
+        # File handler for detailed logs
+        file_handler = logging.FileHandler(os.path.join(self.log_dir, 'evolution.log'))
+        file_handler.setLevel(logging.INFO)
+        
+        # Console handler for basic info
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        
+        # Create formatter
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        console_handler.setFormatter(formatter)
+        
+        # Add handlers
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+    
+    def _save_config(self):
+        """Save experiment configuration to JSON file."""
+        config = {
+            'population_size': self.gan,
+            'virus_population': self.gav,
+            'chromosome_length': self.gal,
+            'q_min': self.q_min.tolist(),
+            'q_range': self.q_range.tolist(),
+            'q_init': self.q_init.tolist(),
+            'experiment_id': self.experiment_id,
+            'timestamp': time.time(),
+            'date': datetime.now().isoformat()
+        }
+        
+        config_file = os.path.join(self.log_dir, 'config.json')
+        with open(config_file, 'w') as f:
+            json.dump(config, f, indent=2)
+        
+        self.logger.info(f"Configuration saved to {config_file}")
+    
     def initialize_populations(self):
         """Initialize the populations of hosts and viruses."""
         # Initialize host population
@@ -92,6 +160,8 @@ class VEGA:
         # Initialize fitness to zeros
         self.fitness = np.zeros((self.gan, 3))
         self.fitv = np.zeros((self.gav, 3))
+        
+        self.logger.info(f"Populations initialized with varying sequence lengths (2-4)")
     
     def rank(self):
         """
@@ -119,11 +189,13 @@ class VEGA:
             # Assign category
             self.gac[k] = h
         
-        # Print rankings (for debugging)
-        print("\nRankings:")
+        # Log rankings
+        rank_str = "\nRankings:\n"
         for i in range(self.gan):
-            print(f"r[{i}]:{self.gac[i]}, {self.fitness[i, self.gac[i]]:.2f}")
-        print("\n")
+            rank_str += f"r[{i}]:{self.gac[i]}, {self.fitness[i, self.gac[i]]:.2f}\n"
+        rank_str += "\n"
+        
+        self.logger.info(rank_str)
     
     def reverse(self, n):
         """
@@ -133,7 +205,7 @@ class VEGA:
         Args:
             n: Individual index to reverse
         """
-        print(f"Reverse: {n}")
+        self.logger.info(f"Reverse motion sequence for individual {n}")
         
         # Reverse yaw (first DOF - leg angle) for each position in sequence
         for m in range(self.host_lengths[n]):
@@ -149,7 +221,7 @@ class VEGA:
         Args:
             n: Individual index to modify
         """
-        print(f"Phase Change: {n}")
+        self.logger.info(f"Phase exchange for individual {n}")
         
         # Exchange phases for each position in sequence
         for m in range(self.host_lengths[n]):
@@ -190,7 +262,7 @@ class VEGA:
         
         # Early generations: search for best solution
         if self.iteration < 100:
-            print(f"Search for {obj_names[h]}")
+            self.logger.info(f"Search for {obj_names[h]}")
             
             # Random individual for crossover
             g3 = int(self.gan * np.random.random())
@@ -226,7 +298,7 @@ class VEGA:
             
             # 1. Insertion mutation (15% chance)
             if (self.host_lengths[g1] < self.gal - 1 and np.random.random() < 0.15):
-                print("-- insertion mutation --")
+                self.logger.info("-- insertion mutation --")
                 k = int(self.host_lengths[g1] * np.random.random())
                 
                 if k < self.host_lengths[g1]:
@@ -245,7 +317,7 @@ class VEGA:
             
             # 2. Deletion mutation (15% chance)
             elif (self.host_lengths[g1] > 2 and np.random.random() < 0.15):
-                print("-- deletion mutation --")
+                self.logger.info("-- deletion mutation --")
                 self.host_lengths[g1] -= 1
                 k = int(self.host_lengths[g1] * np.random.random())
                 
@@ -258,7 +330,7 @@ class VEGA:
             
             # 3. Phase exchange mutation (10% chance)
             if np.random.random() < 0.1:
-                print("-- phase exchange mutation --")
+                self.logger.info("-- phase exchange mutation --")
                 m = int(self.host_lengths[g1] * np.random.random())
                 
                 # Swap phases
@@ -273,7 +345,7 @@ class VEGA:
                 m = int(self.host_lengths[g1] * np.random.random())
                 
                 if k != m:
-                    print("-- order exchange mutation --")
+                    self.logger.info("-- order exchange mutation --")
                     # Swap positions in sequence
                     for i in range(2):
                         for j in range(self.dof):
@@ -286,10 +358,14 @@ class VEGA:
             
         # Later generations: use best solution for given objective
         else:
-            print(f"Best Locomotion of {obj_names[h]}")
+            self.logger.info(f"Best Locomotion of {obj_names[h]}")
             self.gai = g2
         
-        print(f"Iterations: {self.iteration}, host: {self.gai}")
+        self.logger.info(f"Iterations: {self.iteration}, host: {self.gai}")
+        
+        # Save checkpoint occasionally
+        if self.iteration % 10 == 0:
+            self.save_checkpoint()
     
     def evaluate_fitness(self, robot, prev_pos, curr_pos, prev_rot, curr_rot):
         """
@@ -364,8 +440,9 @@ class VEGA:
             
         self.chostl[self.iteration] = self.host_lengths[self.gai]
         
-        print(f"Walking distance: {d:.3f}, posture change: {q:.3f}, moving dir: {a:.3f}")
-        print(f"Current fit[0,F]: {self.fitness[self.gai, 0]:.3f}/{f0:.3f}, "
+        # Log fitness metrics
+        self.logger.info(f"Walking distance: {d:.3f}, posture change: {q:.3f}, moving dir: {a:.3f}")
+        self.logger.info(f"Current fit[0,F]: {self.fitness[self.gai, 0]:.3f}/{f0:.3f}, "
               f"fit[1,L]: {self.fitness[self.gai, 1]:.3f}/{f1:.3f}, "
               f"fit[2,R]: {self.fitness[self.gai, 2]:.3f}/{f2:.3f}, pos-z: {curr_rot[2, 2]:.2f}")
         
@@ -383,20 +460,24 @@ class VEGA:
             self.bfith[self.iteration, j] = self.fitness[k, j]
             self.bhostl[self.iteration, j] = self.host_lengths[k]
             
-        print(f"Best fit[0,F]: {self.bfith[self.iteration, 0]:.3f}, "
+        self.logger.info(f"Best fit[0,F]: {self.bfith[self.iteration, 0]:.3f}, "
               f"fit[1,L]: {self.bfith[self.iteration, 1]:.3f}, "
               f"fit[2,R]: {self.bfith[self.iteration, 2]:.3f}")
         
         # Check if alignment is negative (moving backward) - if so, reverse the sequence
         if q < 0:
-            print(f"\n\n[{self.gai}] Reverse: InnerP: {q}, angle: {a}\n\n")
+            self.logger.info(f"\n\n[{self.gai}] Reverse: InnerP: {q}, angle: {a}\n\n")
             self.reverse(self.gai)
             
         # Optionally, exchange left-right phases if angle is negative
         # This is commented out in the original C++ code
         # elif a < 0:
-        #     print(f"\n\n[{self.gai}] ExchangeLR InnerP: {q}, angle: {a}\n\n")
+        #     self.logger.info(f"\n\n[{self.gai}] ExchangeLR InnerP: {q}, angle: {a}\n\n")
         #     self.exchange_lr(self.gai)
+        
+        # Save data occasionally
+        if self.iteration % 10 == 0:
+            self.save_fitness_data()
             
         return self.fitness[self.gai]
     
@@ -438,7 +519,12 @@ class VEGA:
         return angles
     
     def create_controller(self):
-        """Create a controller from the current individual."""
+        """
+        Create a controller from the current individual.
+        
+        Returns:
+            Controller dictionary with sequence information
+        """
         controller = {
             'type': 'sequence_controller',
             'sequence_length': self.host_lengths[self.gai],
@@ -446,20 +532,299 @@ class VEGA:
         }
         return controller
     
-    def save_data(self):
+    def save_best_controller(self):
         """
-        Save evolution data to a file.
-        This is equivalent to writedata() in the C++ code.
-        """
-        filename = f"data{self.iteration // 100:03d}.txt"
-        with open(filename, "w") as f:
-            for i in range(self.iteration + 1):
-                for j in range(3):
-                    f.write(f"{self.bfith[i, j]:.6f}\t{self.cfith[i, j]:.6f}\t"
-                           f"{self.bhostl[i, j]}\t{self.chostl[i]}\t")
-                f.write("\n")
-        print(f"DATA write end: {filename}")
+        Save the best evolved controller for deployment.
         
+        Returns:
+            Path to the saved controller file
+        """
+        # Find best individual for forward movement
+        best_idx = np.argmax(self.fitness[:, 0])
+        
+        controller = {
+            'type': 'locomotion_controller',
+            'sequence_length': self.host_lengths[best_idx],
+            'sequences': self.hosts[best_idx, :self.host_lengths[best_idx]].copy(),
+            'fitness': self.fitness[best_idx].copy(),
+            'creation_date': time.strftime("%Y-%m-%d-%H:%M:%S"),
+            'parameters': {
+                'dof': self.dof,
+                'q_min': self.q_min.tolist(),
+                'q_range': self.q_range.tolist()
+            },
+            'experiment_id': self.experiment_id
+        }
+        
+        # Save to file
+        filename = os.path.join(self.log_dir, 'models', f"evolved_controller_{time.strftime('%Y%m%d_%H%M%S')}.pkl")
+        with open(filename, 'wb') as f:
+            pickle.dump(controller, f)
+        
+        self.logger.info(f"Best controller saved to {filename} for deployment")
+        return filename
+    
+    def save_fitness_data(self):
+        """
+        Save fitness data to CSV file.
+        
+        Returns:
+            Path to the saved CSV file and plot
+        """
+        # Create DataFrame with all relevant data
+        data = {
+            'iteration': range(self.iteration + 1),
+            'best_forward': self.bfith[:self.iteration + 1, 0],
+            'current_forward': self.cfith[:self.iteration + 1, 0],
+            'best_right_forward': self.bfith[:self.iteration + 1, 1],
+            'current_right_forward': self.cfith[:self.iteration + 1, 1],
+            'best_right_turn': self.bfith[:self.iteration + 1, 2],
+            'current_right_turn': self.cfith[:self.iteration + 1, 2],
+            'best_host_length_forward': self.bhostl[:self.iteration + 1, 0],
+            'best_host_length_right_forward': self.bhostl[:self.iteration + 1, 1],
+            'best_host_length_right_turn': self.bhostl[:self.iteration + 1, 2],
+            'current_host_length': self.chostl[:self.iteration + 1]
+        }
+        
+        # Create DataFrame
+        df = pd.DataFrame(data)
+        
+        # Save to CSV
+        csv_filename = os.path.join(self.log_dir, 'data', f"evolution_data_{self.iteration:06d}.csv")
+        df.to_csv(csv_filename, index=False)
+        self.logger.info(f"Fitness data saved to {csv_filename}")
+        
+        # Generate plots
+        plot_path = self._generate_fitness_plots(df)
+        
+        return csv_filename, plot_path
+    
+    def _generate_fitness_plots(self, df):
+        """
+        Generate fitness plots from the DataFrame.
+        
+        Args:
+            df: DataFrame with fitness data
+            
+        Returns:
+            Path to saved plot file
+        """
+        try:
+            fig, axs = plt.subplots(3, 1, figsize=(10, 15))
+            
+            # Forward fitness
+            axs[0].plot(df['iteration'], df['best_forward'], 'b-', label='Best')
+            axs[0].plot(df['iteration'], df['current_forward'], 'r--', label='Current')
+            axs[0].set_title('Forward Fitness')
+            axs[0].set_xlabel('Iteration')
+            axs[0].set_ylabel('Fitness')
+            axs[0].legend()
+            axs[0].grid(True)
+            
+            # Right forward fitness
+            axs[1].plot(df['iteration'], df['best_right_forward'], 'b-', label='Best')
+            axs[1].plot(df['iteration'], df['current_right_forward'], 'r--', label='Current')
+            axs[1].set_title('Right Forward Fitness')
+            axs[1].set_xlabel('Iteration')
+            axs[1].set_ylabel('Fitness')
+            axs[1].legend()
+            axs[1].grid(True)
+            
+            # Right turn fitness
+            axs[2].plot(df['iteration'], df['best_right_turn'], 'b-', label='Best')
+            axs[2].plot(df['iteration'], df['current_right_turn'], 'r--', label='Current')
+            axs[2].set_title('Right Turn Fitness')
+            axs[2].set_xlabel('Iteration')
+            axs[2].set_ylabel('Fitness')
+            axs[2].legend()
+            axs[2].grid(True)
+            
+            plt.tight_layout()
+            
+            # Save plot
+            plot_path = os.path.join(self.log_dir, 'plots', f"fitness_{self.iteration:06d}.png")
+            plt.savefig(plot_path)
+            plt.close()
+            
+            self.logger.info(f"Fitness plots saved to {plot_path}")
+            return plot_path
+            
+        except Exception as e:
+            self.logger.error(f"Error generating plots: {e}")
+            return None
+    
+    def save_checkpoint(self):
+        """
+        Save a checkpoint of the algorithm's current state for resuming later.
+        
+        Returns:
+            Path to the checkpoint file
+        """
+        checkpoint = {
+            'iteration': self.iteration,
+            'gan': self.gan,
+            'gav': self.gav,
+            'gal': self.gal,
+            'hosts': self.hosts.copy(),
+            'virus': self.virus.copy(),
+            'host_lengths': self.host_lengths.copy(),
+            'fitness': self.fitness.copy(),
+            'fitv': self.fitv.copy(),
+            'best_fitness': self.bfith.copy(),
+            'current_fitness': self.cfith.copy(),
+            'best_host_lengths': self.bhostl.copy(),
+            'current_host_lengths': self.chostl.copy(),
+            'gai': self.gai,
+            'gaj': self.gaj,
+            'ERmode': self.ERmode,
+            'q_min': self.q_min,
+            'q_range': self.q_range,
+            'q_init': self.q_init,
+            'timestamp': time.time(),
+            'experiment_id': self.experiment_id
+        }
+        
+        filename = os.path.join(self.log_dir, 'checkpoints', f"vega_checkpoint_{self.iteration:06d}.pkl")
+        with open(filename, 'wb') as f:
+            pickle.dump(checkpoint, f)
+        
+        self.logger.info(f"Checkpoint saved to {filename}")
+        return filename
+    
+    @classmethod
+    def load_checkpoint(cls, filename):
+        """
+        Load a saved checkpoint to resume evolution.
+        
+        Args:
+            filename: Path to the checkpoint file
+            
+        Returns:
+            VEGA instance loaded from checkpoint
+        """
+        with open(filename, 'rb') as f:
+            checkpoint = pickle.load(f)
+        
+        # Create a new instance
+        vega = cls(
+            population_size=checkpoint['gan'],
+            chromosome_length=checkpoint['gal'],
+            generations=len(checkpoint['best_fitness'])
+        )
+        
+        # Override log directory with the one from the checkpoint
+        if 'experiment_id' in checkpoint:
+            vega.experiment_id = checkpoint['experiment_id']
+            vega.log_dir = os.path.join('logs', 'evolution', vega.experiment_id)
+            vega._setup_logging()
+        
+        # Restore state from checkpoint
+        vega.iteration = checkpoint['iteration']
+        vega.hosts = checkpoint['hosts']
+        if 'virus' in checkpoint:
+            vega.virus = checkpoint['virus']
+        vega.host_lengths = checkpoint['host_lengths']
+        vega.fitness = checkpoint['fitness']
+        if 'fitv' in checkpoint:
+            vega.fitv = checkpoint['fitv']
+        vega.bfith = checkpoint['best_fitness']
+        vega.cfith = checkpoint['current_fitness']
+        vega.bhostl = checkpoint['best_host_lengths']
+        vega.chostl = checkpoint['current_host_lengths']
+        vega.gai = checkpoint['gai']
+        vega.gaj = checkpoint['gaj']
+        if 'ERmode' in checkpoint:
+            vega.ERmode = checkpoint['ERmode']
+        
+        vega.logger.info(f"Loaded checkpoint from iteration {vega.iteration}")
+        return vega
+    
+    @staticmethod
+    def load_controller(filename):
+        """
+        Load a previously saved controller for deployment.
+        
+        Args:
+            filename: Path to the controller file
+            
+        Returns:
+            Loaded controller
+        """
+        with open(filename, 'rb') as f:
+            controller = pickle.load(f)
+        
+        print(f"Loaded controller from {filename}")
+        print(f"Sequence length: {controller['sequence_length']}")
+        if 'fitness' in controller:
+            print(f"Fitness values: {controller['fitness']}")
+        
+        return controller
+    
+    def plot_fitness_history(self):
+        """
+        Plot the complete fitness history of all objectives.
+        
+        Returns:
+            Path to the saved plot
+        """
+        # Create figure
+        plt.figure(figsize=(12, 15))
+        
+        # Plot all objectives
+        objectives = ["Forward", "Right Forward", "Right Turn"]
+        for i in range(3):
+            plt.subplot(4, 1, i+1)
+            plt.plot(self.bfith[:self.iteration+1, i], 'b-', label=f'Best {objectives[i]}')
+            plt.plot(self.cfith[:self.iteration+1, i], 'r--', label=f'Current {objectives[i]}')
+            plt.legend()
+            plt.grid(True)
+            plt.ylabel('Fitness')
+            plt.title(f'{objectives[i]} Fitness')
+        
+        # Plot sequence lengths
+        plt.subplot(4, 1, 4)
+        for i in range(3):
+            plt.plot(self.bhostl[:self.iteration+1, i], '-', label=f'Best {objectives[i]} Length')
+        plt.plot(self.chostl[:self.iteration+1], 'k--', label='Current Length')
+        plt.legend()
+        plt.grid(True)
+        plt.ylabel('Sequence Length')
+        plt.xlabel('Generation')
+        plt.title('Evolution of Sequence Lengths')
+        
+        plt.tight_layout()
+        
+        # Save plot
+        plot_path = os.path.join(self.log_dir, 'plots', f"complete_fitness_history.png")
+        plt.savefig(plot_path)
+        plt.close()
+        
+        self.logger.info(f"Complete fitness history plot saved to {plot_path}")
+        return plot_path
+    
+    def save_summary(self):
+        """Save a summary of the evolution run."""
+        summary = {
+            'experiment_id': self.experiment_id,
+            'total_iterations': self.iteration,
+            'best_fitness_forward': float(np.max(self.bfith[:self.iteration+1, 0])),
+            'best_fitness_right_forward': float(np.max(self.bfith[:self.iteration+1, 1])),
+            'best_fitness_right_turn': float(np.max(self.bfith[:self.iteration+1, 2])),
+            'best_individual_forward': int(np.argmax(self.fitness[:, 0])),
+            'best_individual_right_forward': int(np.argmax(self.fitness[:, 1])),
+            'best_individual_right_turn': int(np.argmax(self.fitness[:, 2])),
+            'end_time': datetime.now().isoformat(),
+            'total_runtime_seconds': time.time() - os.path.getctime(os.path.join(self.log_dir, 'config.json'))
+        }
+        
+        # Save summary
+        summary_path = os.path.join(self.log_dir, 'summary.json')
+        with open(summary_path, 'w') as f:
+            json.dump(summary, f, indent=2)
+            
+        self.logger.info(f"Evolution summary saved to {summary_path}")
+        return summary_path
+    
     @staticmethod
     def randn():
         """
