@@ -152,7 +152,7 @@ def run_evolution_demo(env, robot):
         robot.apply_target_angles()
         
         # Maximum iterations for the demo
-        max_iterations = 50000
+        max_iterations = 1000
         
         # Main simulation loop
         for i in range(max_iterations):
