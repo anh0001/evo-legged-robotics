@@ -61,12 +61,24 @@ class VEGA:
         self.gac = np.full(self.gan, -1)               # Category assignments
         
         # Best fitness tracking
-        self.iterations = 500
-        self.bfith = np.zeros((self.iterations, 3))     # Best fitness history
-        self.cfith = np.zeros((self.iterations, 3))     # Current fitness history
-        self.bhostl = np.zeros((self.iterations, 3), dtype=int)  # Best host length history
-        self.chostl = np.zeros(self.iterations, dtype=int)  # Current host length history
-        
+        self.iterations = generations
+        # allocate one extra row so slices up to self.iteration+1 match range(self.iteration+1)
+        self.bfith  = np.zeros((self.iterations + 1, 3))
+        self.cfith  = np.zeros((self.iterations + 1, 3))
+        self.bhostl = np.zeros((self.iterations + 1, 3), dtype=int)
+        self.chostl = np.zeros(self.iterations + 1,     dtype=int)
+
+        # helper to auto-grow history arrays when needed
+        def _ensure_history_capacity(required_steps):
+            current = self.cfith.shape[0]
+            if required_steps > current:
+                pad = required_steps - current
+                self.cfith  = np.pad(self.cfith,  ((0, pad),(0,0)), mode='constant')
+                self.bfith  = np.pad(self.bfith,  ((0, pad),(0,0)), mode='constant')
+                self.bhostl = np.pad(self.bhostl, ((0, pad),(0,0)), mode='constant')
+                self.chostl = np.pad(self.chostl, (0, pad),       mode='constant')
+        self._ensure_history_capacity = _ensure_history_capacity
+
         # Current individual and sequence indices
         self.gai = 0      # Current host ID for simulation
         self.gaj = 0      # Current sequence ID
@@ -382,6 +394,9 @@ class VEGA:
         Returns:
             Updated fitness array for the current individual
         """
+        # dynamically grow history arrays if iteration exceeds current capacity
+        self._ensure_history_capacity(self.iteration + 1)
+
         # Extract rotation angle (around z-axis) from rotation matrices
         if curr_rot[0, 0] == 0 and curr_rot[1, 0] == 0:
             ra = 0
@@ -571,6 +586,8 @@ class VEGA:
         Returns:
             Path to the saved CSV file and plot
         """
+        # Ensure history arrays can hold this iteration + 1
+        self._ensure_history_capacity(self.iteration + 1)
         # Create DataFrame with all relevant data
         data = {
             'iteration': range(self.iteration + 1),
