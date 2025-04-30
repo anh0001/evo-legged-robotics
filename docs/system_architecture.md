@@ -15,7 +15,7 @@ The robot model consists of:
 
 ### Evolutionary Algorithms
 
-- Vector Evaluated Genetic Algorithm (VEGA) for multi-objective optimization
+- Virus Evolutionary Genetic Algorithm (VEGA) for multi-objective optimization
 - Steady-State Genetic Algorithm (SSGA) for evolving locomotion patterns
 
 ### Neural Network Controller

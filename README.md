@@ -6,7 +6,7 @@
 
 A Python implementation of evolutionary robotics for legged robots using the PyBullet physics engine. This repository contains code for developing and optimizing adaptive locomotion patterns using evolutionary algorithms and neural networks.
 
-![Robot Simulation](https://github.com/yourusername/evo-legged-robotics/raw/main/docs/images/robot_simulation.png)
+![Robot Simulation](https://github.com/anh0001/evo-legged-robotics/raw/main/docs/images/robot_simulation.png)
 
 ## Overview
 
@@ -14,7 +14,7 @@ The implementation uses PyBullet for physics simulation and implements various e
 
 The robot model features a main body with multiple articulated legs, each with multiple degrees of freedom. The project includes:
 
-- **Vector Evaluated Genetic Algorithm (VEGA)** for multi-objective optimization
+- **Virus Evolutionary Genetic Algorithm (VEGA)** for multi-objective optimization
 - **Steady-State Genetic Algorithm (SSGA)** for locomotion pattern evolution
 - **Neural network controllers** for adaptive locomotion on uneven terrain
 - **Leg height sensing** for terrain adaptation
@@ -85,7 +85,7 @@ python main.py --mode integrated
 ### Mode Descriptions
 
 - **standard**: Uses predefined locomotion patterns  
-- **evolution**: Uses Vector Evaluated Genetic Algorithm (VEGA) for locomotion optimization  
+- **evolution**: Uses Virus Evolutionary Genetic Algorithm (VEGA) for locomotion optimization  
 - **neural**: Uses neural network for adaptive control  
 - **adaptive**: Combines sequence-based locomotion with neural adaptation  
 - **neuro_evolutionary**: Combines neural and evolutionary approaches  
