@@ -20,6 +20,13 @@ class Environment:
         p.setTimeStep(time_step)
         p.setGravity(0, 0, gravity)
         
+        # Initialize simulation time and other attributes
+        self.sim_time = 0.0
+        self.start_time = time.time()
+        self.robot_id = None
+        self.objects = []
+        self.terrain_type = terrain_type
+        
         # Configure physics engine to match ODE parameters
         p.setPhysicsEngineParameter(
             fixedTimeStep=time_step,
@@ -36,7 +43,7 @@ class Environment:
         
         # Create ground with high friction
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        self.ground_id = p.loadURDF("plane.urdf")
+        self.ground_id = self._create_terrain(terrain_type)
         
         # Set ground properties to match ODE (dInfinity friction)
         p.changeDynamics(
@@ -55,6 +62,9 @@ class Environment:
         
         # Set up camera matching C++ viewpoint
         self._setup_camera()
+        
+        # Setup debug visualizer
+        self.setup_debug_visualizer()
     
     def _create_terrain(self, terrain_type):
         """
@@ -211,11 +221,17 @@ class Environment:
         
         # Clear existing objects except ground
         for obj_id in self.objects:
-            p.removeBody(obj_id)
+            try:
+                p.removeBody(obj_id)
+            except:
+                pass  # Body might already be removed
         self.objects = []
         
         # Recreate terrain if needed
-        p.removeBody(self.ground_id)
+        try:
+            p.removeBody(self.ground_id)
+        except:
+            pass  # Ground might already be removed
         self.ground_id = self._create_terrain(self.terrain_type)
         
         # Reset camera
@@ -268,19 +284,23 @@ class Environment:
         if self.robot_id is None:
             return
         
-        # Get robot position
-        pos, _ = p.getBasePositionAndOrientation(self.robot_id)
-        
-        # Update camera target position
-        self.cam_target_pos = [pos[0], pos[1], 0.5]
-        
-        # Apply camera settings
-        p.resetDebugVisualizerCamera(
-            cameraDistance=self.cam_distance,
-            cameraYaw=self.cam_yaw,
-            cameraPitch=self.cam_pitch,
-            cameraTargetPosition=self.cam_target_pos
-        )
+        try:
+            # Get robot position
+            pos, _ = p.getBasePositionAndOrientation(self.robot_id)
+            
+            # Update camera target position
+            self.cam_target_pos = [pos[0], pos[1], 0.5]
+            
+            # Apply camera settings
+            p.resetDebugVisualizerCamera(
+                cameraDistance=self.cam_distance,
+                cameraYaw=self.cam_yaw,
+                cameraPitch=self.cam_pitch,
+                cameraTargetPosition=self.cam_target_pos
+            )
+        except:
+            # Robot might have been removed
+            pass
     
     def get_observation(self):
         """
@@ -296,14 +316,18 @@ class Environment:
         
         # Add robot state if robot exists
         if self.robot_id is not None:
-            pos, orn = p.getBasePositionAndOrientation(self.robot_id)
-            rot_matrix = p.getMatrixFromQuaternion(orn)
-            
-            obs.update({
-                'robot_position': pos,
-                'robot_orientation': orn,
-                'robot_rotation_matrix': rot_matrix
-            })
+            try:
+                pos, orn = p.getBasePositionAndOrientation(self.robot_id)
+                rot_matrix = p.getMatrixFromQuaternion(orn)
+                
+                obs.update({
+                    'robot_position': pos,
+                    'robot_orientation': orn,
+                    'robot_rotation_matrix': rot_matrix
+                })
+            except:
+                # Robot might have been removed
+                pass
         
         return obs
     
@@ -371,8 +395,12 @@ class TrainingEnvironment(Environment):
         
         # Record trajectory
         if self.robot_id is not None:
-            pos, orn = p.getBasePositionAndOrientation(self.robot_id)
-            self.trajectory.append((pos, orn))
+            try:
+                pos, orn = p.getBasePositionAndOrientation(self.robot_id)
+                self.trajectory.append((pos, orn))
+            except:
+                # Robot might have been removed
+                pass
         
         # Check if episode is done
         done = self.current_step >= self.max_steps
