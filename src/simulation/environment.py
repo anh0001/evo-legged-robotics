@@ -11,59 +11,50 @@ class Environment:
     This is a port of the ODE-based environment from the original C++ code.
     """
     
-    def __init__(self, render=True, time_step=0.01, gravity=-9.81,
-                 erp=0.2, cfm=0.00001, terrain_type="flat"):
-        """
-        Initialize the simulation environment.
-        
-        Args:
-            render: Whether to render the simulation
-            time_step: Simulation time step
-            gravity: Gravity acceleration value
-            erp: Error Reduction Parameter (similar to ODE's ERP)
-            cfm: Constraint Force Mixing (similar to ODE's CFM)
-            terrain_type: Type of terrain to generate ("flat", "rough", "obstacles")
-        """
-        # Connect to physics server
+    def __init__(self, render=True, time_step=0.01, gravity=-9.81, terrain_type="flat"):
+        """Initialize environment with physics matching ODE."""
         self.client = p.connect(p.GUI if render else p.DIRECT)
         
-        # Configure simulation parameters
+        # Set physics parameters to match ODE
         self.time_step = time_step
         p.setTimeStep(time_step)
         p.setGravity(0, 0, gravity)
         
-        # Set additional physics parameters
+        # Configure physics engine to match ODE parameters
         p.setPhysicsEngineParameter(
             fixedTimeStep=time_step,
-            numSolverIterations=50,
-            numSubSteps=4,
-            erp=erp,
-            contactERP=erp,
-            frictionERP=erp,
-            globalCFM=cfm
+            numSolverIterations=150,      # Higher for stability
+            numSubSteps=1,
+            erp=0.9,                       # Match ODE soft_erp
+            contactERP=0.9,
+            frictionERP=0.9,
+            globalCFM=1e-5,                # Match ODE soft_cfm
+            contactBreakingThreshold=0.001,
+            enableConeFriction=1,
+            deterministicOverlappingPairs=1
         )
         
-        # Add data path for URDF models
+        # Create ground with high friction
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        self.ground_id = p.loadURDF("plane.urdf")
         
-        # Store robot IDs
-        self.robot_id = None
-        self.objects = []
+        # Set ground properties to match ODE (dInfinity friction)
+        p.changeDynamics(
+            self.ground_id, -1,
+            lateralFriction=1000.0,        # Very high friction
+            spinningFriction=0.1,
+            rollingFriction=0.001,
+            restitution=0.0,
+            contactDamping=300.0,
+            contactStiffness=30000.0
+        )
         
-        # Create ground
-        self.terrain_type = terrain_type
-        self.ground_id = self._create_terrain(terrain_type)
+        # Add obstacles if requested
+        if terrain_type == "obstacles":
+            self._add_obstacles()
         
-        # Set up camera
+        # Set up camera matching C++ viewpoint
         self._setup_camera()
-        
-        # For timing
-        self.start_time = time.time()
-        self.sim_time = 0
-        
-        # For visualization
-        if render:
-            self.setup_debug_visualizer()
     
     def _create_terrain(self, terrain_type):
         """

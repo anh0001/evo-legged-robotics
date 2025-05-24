@@ -498,39 +498,29 @@ class VEGA:
     
     def get_target_angles(self):
         """
-        Get target angles for the robot's current sequence position.
-        This follows the logic in loco_main() from the C++ code.
-        
-        Returns:
-            Array of target angles for all legs
+        Get target angles matching C++ implementation exactly.
+        Returns angles for 6 legs x 3 DOF each.
         """
         # Get current sequence position
         gaj = self.gaj % self.host_lengths[self.gai]
         
-        # Create angles array (6 legs x 3 DOF)
-        angles = np.zeros((6, 3))
+        # Create angles array
+        angles = np.zeros((6, 3))  # 6 legs, 3 DOF each
         
-        # Set target angles from current sequence position
-        for i in range(6):  # 6 legs
-            for j in range(3):  # 3 DOF
-                # Determine which phase to use based on leg index
-                if j == 0:  # First DOF (leg angle)
-                    phase = 0 if i % 2 == 0 else 1  # Alternating phases for even/odd legs
-                    angles[i, j] = np.radians(self.hosts[self.gai, gaj, phase, j])
-                else:  # Other DOFs (middle and end joints)
+        # Set angles based on C++ logic
+        for i in range(6):  # For each leg
+            for j in range(3):  # For each DOF
+                if j == 0:  # First DOF
+                    # Even legs use phase 0, odd legs use phase 1
                     phase = 0 if i % 2 == 0 else 1
-                    # Apply signs based on which side of the robot
-                    if i < 3:  # Right side
+                    angles[i, j] = np.radians(self.hosts[self.gai, gaj, phase, j])
+                else:  # DOF 1 and 2
+                    phase = 0 if i % 2 == 0 else 1
+                    if i < 3:  # Right side legs (0, 1, 2)
                         angles[i, j] = -np.radians(self.hosts[self.gai, gaj, phase, j])
-                    else:  # Left side
+                    else:  # Left side legs (3, 4, 5)
                         angles[i, j] = np.radians(self.hosts[self.gai, gaj, phase, j])
         
-        # Apply posz to handle flipped robot (if it flips over)
-        posz = 1  # Upright by default
-        # In a real implementation, this would be determined from the robot's orientation
-        if posz != 1:
-            angles = angles * posz
-            
         return angles
     
     def create_controller(self):
