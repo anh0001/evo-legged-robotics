@@ -667,27 +667,167 @@ class VEGA:
                 np.random.random() + np.random.random() + np.random.random() - 6.0)
     
     def save_fitness_data(self):
-        """Save enhanced fitness data."""
+        """Save enhanced fitness data with proper array length handling."""
+        # Ensure we have valid iteration count
+        if self.iteration < 0:
+            self.iteration = 0
+        
+        # Create base data with consistent lengths
+        num_iterations = self.iteration + 1
+        
         data = {
-            'iteration': range(self.iteration + 1),
-            'best_forward': self.bfith[:self.iteration + 1, 0],
-            'best_stability': self.bfith[:self.iteration + 1, 1],
-            'best_energy': self.bfith[:self.iteration + 1, 2],
-            'best_smoothness': self.bfith[:self.iteration + 1, 3],
-            'best_direction': self.bfith[:self.iteration + 1, 4],
-            'best_contact': self.bfith[:self.iteration + 1, 5],
-            'current_forward': self.cfith[:self.iteration + 1, 0],
-            'current_stability': self.cfith[:self.iteration + 1, 1],
-            'current_energy': self.cfith[:self.iteration + 1, 2],
-            'current_smoothness': self.cfith[:self.iteration + 1, 3],
-            'current_direction': self.cfith[:self.iteration + 1, 4],
-            'current_contact': self.cfith[:self.iteration + 1, 5],
-            'stability_history': self.stability_history
+            'iteration': range(num_iterations),
+            'best_forward': self.bfith[:num_iterations, 0],
+            'best_stability': self.bfith[:num_iterations, 1], 
+            'best_energy': self.bfith[:num_iterations, 2],
+            'best_smoothness': self.bfith[:num_iterations, 3],
+            'best_direction': self.bfith[:num_iterations, 4],
+            'best_contact': self.bfith[:num_iterations, 5],
+            'current_forward': self.cfith[:num_iterations, 0],
+            'current_stability': self.cfith[:num_iterations, 1],
+            'current_energy': self.cfith[:num_iterations, 2],
+            'current_smoothness': self.cfith[:num_iterations, 3],
+            'current_direction': self.cfith[:num_iterations, 4],
+            'current_contact': self.cfith[:num_iterations, 5]
         }
         
+        # Create DataFrame from base data first
         df = pd.DataFrame(data)
+        
+        # Handle stability_history separately - it may have different length
+        if self.stability_history:
+            # Truncate or pad stability_history to match iteration count
+            if len(self.stability_history) >= num_iterations:
+                # Take the last num_iterations values
+                stability_data = self.stability_history[-num_iterations:]
+            else:
+                # Pad with the last value or zeros
+                stability_data = list(self.stability_history)
+                last_value = stability_data[-1] if stability_data else 0.0
+                while len(stability_data) < num_iterations:
+                    stability_data.append(last_value)
+            
+            df['stability_history'] = stability_data
+        else:
+            # If no stability history, fill with zeros
+            df['stability_history'] = [0.0] * num_iterations
+        
+        # Save to CSV
         csv_filename = os.path.join(self.log_dir, 'data', f"enhanced_evolution_data_{self.iteration:06d}.csv")
         df.to_csv(csv_filename, index=False)
         
         self.logger.info(f"Enhanced fitness data saved to {csv_filename}")
         return csv_filename
+    
+    def save_best_controller(self, filename=None):
+        """
+        Save the best controller (chromosome) found during evolution.
+        
+        Args:
+            filename: Optional filename to save to. If None, auto-generates.
+            
+        Returns:
+            Path to saved controller file
+        """
+        if filename is None:
+            filename = os.path.join(self.log_dir, 'models', f'best_controller_{self.iteration:06d}.pkl')
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        
+        # Find best individual across all objectives
+        best_overall_idx = 0
+        best_overall_score = 0
+        
+        # Calculate weighted sum of all objectives for each individual
+        for i in range(self.gan):
+            weighted_score = (
+                self.fitness[i, 0] * self.fitness_weights['forward_motion'] +
+                self.fitness[i, 1] * self.fitness_weights['stability'] +
+                self.fitness[i, 2] * self.fitness_weights['energy_efficiency'] +
+                self.fitness[i, 3] * self.fitness_weights['smoothness'] +
+                self.fitness[i, 4] * self.fitness_weights['direction_control'] +
+                self.fitness[i, 5] * self.fitness_weights['foot_contact']
+            )
+            
+            if weighted_score > best_overall_score:
+                best_overall_score = weighted_score
+                best_overall_idx = i
+        
+        # Save best controller data
+        controller_data = {
+            'individual_index': best_overall_idx,
+            'sequence_length': self.host_lengths[best_overall_idx],
+            'sequences': self.hosts[best_overall_idx, :self.host_lengths[best_overall_idx], :, :].copy(),
+            'fitness_values': self.fitness[best_overall_idx].copy(),
+            'weighted_score': best_overall_score,
+            'fitness_weights': self.fitness_weights.copy(),
+            'iteration_found': self.iteration,
+            'chromosome_length': self.gal,
+            'dof': self.dof,
+            'q_min': self.q_min.copy(),
+            'q_range': self.q_range.copy(),
+            'q_init': self.q_init.copy(),
+            'experiment_id': self.experiment_id,
+            'timestamp': time.time()
+        }
+        
+        # Save using pickle
+        with open(filename, 'wb') as f:
+            pickle.dump(controller_data, f)
+        
+        self.logger.info(f"Best controller saved to {filename}")
+        self.logger.info(f"Best individual: {best_overall_idx}, Sequence length: {self.host_lengths[best_overall_idx]}")
+        self.logger.info(f"Fitness values: {self.fitness[best_overall_idx]}")
+        self.logger.info(f"Weighted score: {best_overall_score:.3f}")
+        
+        return filename
+    
+    def save_summary(self, filename=None):
+        """
+        Save a summary of the evolution results.
+        
+        Args:
+            filename: Optional filename to save to. If None, auto-generates.
+            
+        Returns:
+            Path to saved summary file
+        """
+        if filename is None:
+            filename = os.path.join(self.log_dir, f'evolution_summary_{self.iteration:06d}.json')
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        
+        # Calculate final statistics
+        final_stats = {}
+        
+        for i, obj_name in enumerate(['forward_motion', 'stability', 'energy_efficiency', 
+                                     'smoothness', 'direction_control', 'foot_contact']):
+            final_stats[obj_name] = {
+                'best_fitness': float(np.max(self.fitness[:, i])),
+                'mean_fitness': float(np.mean(self.fitness[:, i])),
+                'std_fitness': float(np.std(self.fitness[:, i])),
+                'final_best': float(self.bfith[self.iteration, i]) if self.iteration < len(self.bfith) else 0.0
+            }
+        
+        # Overall summary
+        summary = {
+            'experiment_id': self.experiment_id,
+            'completion_time': time.time(),
+            'total_iterations': self.iteration,
+            'population_size': self.gan,
+            'chromosome_length_range': [int(np.min(self.host_lengths)), int(np.max(self.host_lengths))],
+            'fitness_weights': self.fitness_weights,
+            'final_statistics': final_stats,
+            'convergence_achieved': len(self.stability_history) > 100 and np.mean(self.stability_history[-50:]) > 0.8,
+            'stability_failures': sum(1 for s in self.stability_history if s < 0.5) if self.stability_history else 0,
+            'avg_stability': float(np.mean(self.stability_history)) if self.stability_history else 0.0
+        }
+        
+        # Save summary
+        with open(filename, 'w') as f:
+            json.dump(summary, f, indent=2)
+        
+        self.logger.info(f"Evolution summary saved to {filename}")
+        return filename
