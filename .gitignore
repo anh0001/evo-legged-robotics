@@ -1,3 +1,4 @@
+results/
 logs/
 *.h5
 *.pkl
