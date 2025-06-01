@@ -15,13 +15,17 @@ import itertools
 from concurrent.futures import ProcessPoolExecutor
 import logging
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Ensure project root and src directory are on the path
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+SRC_DIR = os.path.join(ROOT_DIR, "src")
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
 from robot.leg_robot import LeggedRobot
 from simulation.environment import Environment
-from evolution.vega import VEGA
-
+from experiments.core.enhanced_vega import EnhancedVEGA
 
 class AblationStudyManager:
     """
@@ -204,7 +208,7 @@ class AblationStudyManager:
             env.add_robot(robot)
             
             # Configure VEGA with operator settings
-            vega = VEGA(
+            vega = EnhancedVEGA(
                 population_size=self.base_config["population_size"],
                 chromosome_length=self.base_config["chromosome_length"],
                 generations=self.base_config["max_iterations"]
