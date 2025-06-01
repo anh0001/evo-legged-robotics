@@ -8,8 +8,9 @@ import numpy as np
 import logging
 from datetime import datetime
 from collections import defaultdict
+from evolution.vega import VEGA
 
-class EnhancedVEGA:
+class EnhancedVEGA(VEGA):
     """
     Enhanced VEGA with comprehensive operator tracking and configurable ablation support.
     Extends the existing VEGA implementation with critical research-focused features.

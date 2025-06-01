@@ -25,7 +25,7 @@ if SRC_DIR not in sys.path:
 
 from robot.leg_robot import LeggedRobot
 from simulation.environment import Environment
-from experiments.core.enhanced_vega import EnhancedVEGA
+from evolution.enhanced_vega import EnhancedVEGA
 
 class AblationStudyManager:
     """
