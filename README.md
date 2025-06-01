@@ -29,6 +29,20 @@ The robot model features a main body with multiple articulated legs, each with m
 - TensorBoard integration for neural network training analysis
 - Comprehensive logging and data collection
 
+## Test
+
+### Step 1: Quick Setup
+# ...
+chmod +x scripts/validate_framework.py
+python scripts/validate_framework.py
+
+### Step 2: Quick Test Run
+# Test the enhanced VEGA with minimal settings
+python experiments/core/run_evolution.py --quick-test --max-iterations=100
+
+# Test ablation framework with 2 configurations
+python experiments/studies/ablation_study.py --configs=minimal --runs=3
+
 ## Installation
 
 ```bash
@@ -111,73 +125,6 @@ Training data and visualizations are stored in the `logs/neuro_adaptive_terrain`
 - **CSV files**: Training data saved for external analysis  
 - **PNG plots**: Generated visualizations of training progress  
 - **Log files**: Detailed execution logs  
-
-## Quick Start
-
-```python
-from evo_legged_robotics.simulation import Environment
-from evo_legged_robotics.robot import LeggedRobot
-from evo_legged_robotics.controllers import NeuroAdaptiveTerrainController
-
-# Create simulation environment
-env = Environment(render=True, terrain_type="obstacles")
-
-# Initialize robot with default parameters
-robot = LeggedRobot()
-env.add_robot(robot)
-
-# Create controller
-controller = NeuroAdaptiveTerrainController()
-
-# Run simulation
-for i in range(1000):
-    # Get current state with leg positions
-    state = get_extended_state(robot)
-    
-    # Get actions from controller
-    actions = controller.get_actions(state)
-    
-    # Apply to robot and step simulation
-    robot.set_target_angles(actions)
-    robot.apply_target_angles()
-    env.step()
-    
-    # Learn from experience when orientation improves
-    controller.learn(state)
-```
-
-## Evolution Training
-
-Train a new controller using evolutionary algorithms:
-
-```python
-from evo_legged_robotics.evolution import VEGA
-from evo_legged_robotics.simulation import TrainingEnvironment
-from evo_legged_robotics.robot import LeggedRobot
-
-# Create training environment
-env = TrainingEnvironment(terrain_type="flat")
-
-# Initialize robot
-robot = LeggedRobot()
-
-# Initialize evolutionary algorithm
-vega = VEGA(
-    population_size=30,
-    chromosome_length=10,
-    generations=500,
-    fitness_objectives=["forward_speed", "energy_efficiency", "stability"]
-)
-
-# Train controller (this will take time)
-best_controller = vega.train(robot, env, parallel=True)
-
-# Save trained controller
-best_controller.save('models/my_controller.pkl')
-
-# Visualize fitness progress
-vega.plot_fitness_history()
-```
 
 ## Project Structure
 
