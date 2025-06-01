@@ -29,20 +29,6 @@ The robot model features a main body with multiple articulated legs, each with m
 - TensorBoard integration for neural network training analysis
 - Comprehensive logging and data collection
 
-## Test
-
-### Step 1: Quick Setup
-# ...
-chmod +x scripts/validate_framework.py
-python scripts/validate_framework.py
-
-### Step 2: Quick Test Run
-# Test the enhanced VEGA with minimal settings
-python experiments/core/run_evolution.py --quick-test --max-iterations=100
-
-# Test ablation framework with 2 configurations
-python experiments/studies/ablation_study.py --configs=minimal --runs=3
-
 ## Installation
 
 ```bash
@@ -135,6 +121,20 @@ Training data and visualizations are stored in the `logs/neuro_adaptive_terrain`
 - `examples/` - Example scripts for various scenarios
 - `docs/` - Documentation and resources
 - `logs/` - Training logs, visualizations, and data
+
+## Test
+
+### Step 1: Quick Setup
+# ...
+chmod +x scripts/validate_framework.py
+python scripts/validate_framework.py
+
+### Step 2: Quick Test Run
+# Test the enhanced VEGA with minimal settings
+python experiments/core/run_evolution.py --quick-test --max-iterations=100
+
+# Test ablation framework with 2 configurations
+python experiments/studies/ablation_study.py --configs=minimal --runs=3
 
 ## Background
 
