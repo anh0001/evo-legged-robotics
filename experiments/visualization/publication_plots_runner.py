@@ -20,6 +20,16 @@ if project_root not in sys.path:
 
 from experiments.visualization.publication_plots import PublicationVisualizationPipeline
 
+# Objectives used throughout the analysis
+OBJECTIVES = [
+    "forward_motion",
+    "stability",
+    "energy_efficiency",
+    "smoothness",
+    "direction_control",
+    "foot_contact",
+]
+
 def find_latest_results():
     """Find the most recent ablation study results."""
     results_pattern = "results/ablation_study_*"
@@ -85,34 +95,44 @@ def calculate_config_statistics(config_id, run_results):
             })
     
     if not final_performances:
-        return {
+        empty_stats = {
             'name': config_id,
             'active_operators': [],
             'mean_hypervolume': 0.0,
             'std_hypervolume': 0.0,
-            'mean_forward_motion': 0.0,
-            'std_forward_motion': 0.0
         }
+        for obj in OBJECTIVES:
+            empty_stats[f'mean_{obj}'] = 0.0
+            empty_stats[f'std_{obj}'] = 0.0
+        return empty_stats
     
     # Calculate statistics
     hypervolumes = [p.get('hypervolume', 0) for p in final_performances]
-    forward_motions = []
-    
+
+    # Prepare containers for each objective
+    objective_values = {obj: [] for obj in OBJECTIVES}
+
     for p in final_performances:
-        if isinstance(p.get('best_fitness'), list) and len(p['best_fitness']) > 0:
-            forward_motions.append(p['best_fitness'][0])
-        else:
-            forward_motions.append(0.0)
-    
-    return {
+        best = p.get('best_fitness')
+        for idx, obj in enumerate(OBJECTIVES):
+            if isinstance(best, list) and len(best) > idx:
+                objective_values[obj].append(best[idx])
+            else:
+                objective_values[obj].append(0.0)
+
+    stats = {
         'name': config_id,
         'active_operators': get_active_operators(config_id),
         'mean_hypervolume': np.mean(hypervolumes),
         'std_hypervolume': np.std(hypervolumes),
-        'mean_forward_motion': np.mean(forward_motions),
-        'std_forward_motion': np.std(forward_motions),
-        'num_runs': len(final_performances)
+        'num_runs': len(final_performances),
     }
+
+    for obj, values in objective_values.items():
+        stats[f'mean_{obj}'] = np.mean(values)
+        stats[f'std_{obj}'] = np.std(values)
+
+    return stats
 
 def get_active_operators(config_id):
     """Get active operators for a configuration based on naming convention."""
@@ -186,8 +206,7 @@ def create_mock_convergence_data(ablation_results):
     """Create mock convergence data for visualization."""
     convergence_data = {}
     
-    objectives = ["forward_motion", "stability", "energy_efficiency", 
-                  "smoothness", "direction_control", "foot_contact"]
+    objectives = OBJECTIVES
     
     for config_id, config_data in ablation_results.items():
         # Generate generations array
