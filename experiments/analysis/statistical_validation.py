@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.stats import f_oneway, chi2_contingency, mannwhitneyu
-from statsmodels.stats.multivariate import multivariate_stats
 from statsmodels.multivariate.manova import MANOVA
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 import matplotlib.pyplot as plt
