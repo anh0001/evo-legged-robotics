@@ -136,6 +136,11 @@ python experiments/core/run_evolution.py --quick-test --max-iterations=100
 # Test ablation framework with 2 configurations
 python experiments/studies/ablation_study.py --configs=minimal --runs=3
 
+python experiments/studies/ablation_study.py --full-study
+
+python experiments/visualization/publication_plots_runner.py --mock-data
+python experiments/visualization/publication_plots_runner.py
+
 ## Background
 
 This project is based on evolutionary robotics research originally developed at Kubota Lab. The original implementation used Open Dynamics Engine (ODE) for physics simulation and implemented genetic algorithms for evolving effective locomotion patterns. This Python implementation aims to modernize the codebase while preserving the core research concepts.
