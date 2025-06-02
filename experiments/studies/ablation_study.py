@@ -16,7 +16,6 @@ from concurrent.futures import ProcessPoolExecutor
 import logging
 import matplotlib.pyplot as plt
 import seaborn as sns
-from experiments.analysis.statistical_validation import StatisticalValidator
 
 # Ensure project root and src directory are on the path
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -26,6 +25,8 @@ if ROOT_DIR not in sys.path:
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
+# Now import project modules after path setup
+from experiments.analysis.statistical_validation import StatisticalValidator
 from robot.leg_robot import LeggedRobot
 from simulation.environment import Environment
 from evolution.enhanced_vega import EnhancedVEGA
