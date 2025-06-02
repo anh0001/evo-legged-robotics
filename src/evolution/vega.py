@@ -678,7 +678,7 @@ class VEGA:
         data = {
             'iteration': range(num_iterations),
             'best_forward': self.bfith[:num_iterations, 0],
-            'best_stability': self.bfith[:num_iterations, 1], 
+            'best_stability': self.bfith[:num_iterations, 1],
             'best_energy': self.bfith[:num_iterations, 2],
             'best_smoothness': self.bfith[:num_iterations, 3],
             'best_direction': self.bfith[:num_iterations, 4],

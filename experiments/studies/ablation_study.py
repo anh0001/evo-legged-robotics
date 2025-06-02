@@ -244,7 +244,7 @@ class AblationStudyManager:
             
             # Save fitness data
             fitness_file = exp_dir / "fitness_data.csv"
-            vega.save_fitness_data(str(fitness_file))
+            vega.save_fitness_data()
             
             # Cleanup
             env.close()
