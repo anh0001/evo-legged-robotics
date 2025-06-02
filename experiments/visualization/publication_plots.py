@@ -4,6 +4,8 @@ Automated Visualization and Reporting Pipeline
 Generates publication-ready figures and comprehensive reports for hexapod locomotion research.
 """
 
+import matplotlib
+matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
