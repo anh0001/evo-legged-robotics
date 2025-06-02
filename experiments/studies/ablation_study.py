@@ -14,6 +14,9 @@ from pathlib import Path
 import itertools
 from concurrent.futures import ProcessPoolExecutor
 import logging
+import matplotlib.pyplot as plt
+import seaborn as sns
+from experiments.analysis.statistical_validation import StatisticalValidator
 
 # Ensure project root and src directory are on the path
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -447,28 +450,134 @@ class AblationStudyManager:
     
     def _results_to_dataframe(self, all_results):
         """Convert results list to structured DataFrame."""
-        # Implementation details for data structuring
-        pass
+        records = []
+        objectives = list(self.base_config.get("fitness_weights", {}).keys())
+
+        for result in all_results:
+            # Skip failed experiments
+            if not isinstance(result, dict) or result.get("error"):
+                continue
+
+            perf = result.get("final_performance", {})
+            fitness = perf.get("best_fitness", [np.nan] * len(objectives))
+
+            row = {
+                "config_id": result.get("config_id"),
+                "run_id": result.get("run_id"),
+                "final_iteration": result.get("final_iteration", np.nan),
+                "total_steps": result.get("total_steps", np.nan),
+                "final_hypervolume": perf.get("final_hypervolume", np.nan),
+            }
+
+            for i, obj in enumerate(objectives):
+                col = f"final_{obj}_fitness"
+                row[col] = fitness[i] if i < len(fitness) else np.nan
+
+            records.append(row)
+
+        df = pd.DataFrame(records)
+        csv_path = self.results_dir / "compiled_results.csv"
+        df.to_csv(csv_path, index=False)
+        return df
     
     def _perform_statistical_tests(self, df_results):
         """Perform MANOVA and post-hoc tests as specified in Table 5."""
-        # Implementation of statistical testing framework
-        pass
+        validator = StatisticalValidator(
+            significance_level=self.significance_level,
+            min_effect_size=self.target_effect_size,
+        )
+
+        manova = validator.perform_manova_analysis(df_results)
+        anova = validator.perform_univariate_anova(df_results)
+        normality = validator.test_normality_assumptions(df_results)
+        homogeneity = validator.test_homogeneity_of_variance(df_results)
+        power = validator.power_analysis(df_results)
+
+        results = {
+            "manova": manova,
+            "anova": anova,
+            "normality": normality,
+            "homogeneity": homogeneity,
+            "power_analysis": power,
+        }
+
+        with open(self.results_dir / "statistical_results.json", "w") as f:
+            json.dump(results, f, indent=2, default=str)
+
+        return results
     
     def _calculate_effect_sizes(self, df_results):
         """Calculate Cohen's d and other effect size measures."""
-        # Implementation of effect size calculations
-        pass
+        validator = StatisticalValidator(
+            significance_level=self.significance_level,
+            min_effect_size=self.target_effect_size,
+        )
+
+        effect_sizes = validator.calculate_effect_sizes(df_results)
+
+        with open(self.results_dir / "effect_sizes.json", "w") as f:
+            json.dump(effect_sizes, f, indent=2)
+
+        return effect_sizes
     
     def _generate_summary_report(self, df_results, statistical_results, effect_sizes):
         """Generate comprehensive summary report."""
-        # Implementation of report generation
-        pass
+        objectives = list(self.base_config.get("fitness_weights", {}).keys())
+
+        summary = {}
+        for config_id, group in df_results.groupby("config_id"):
+            stats = {"num_runs": len(group)}
+            for obj in objectives:
+                col = f"final_{obj}_fitness"
+                if col in group:
+                    stats[f"mean_{obj}"] = float(group[col].mean())
+                    stats[f"std_{obj}"] = float(group[col].std(ddof=0))
+            stats["mean_hypervolume"] = float(group["final_hypervolume"].mean())
+            stats["std_hypervolume"] = float(group["final_hypervolume"].std(ddof=0))
+            summary[config_id] = stats
+
+        report = {
+            "generated_at": datetime.now().isoformat(),
+            "summary": summary,
+            "statistical_results": statistical_results,
+            "effect_sizes": effect_sizes,
+        }
+
+        with open(self.results_dir / "summary_report.json", "w") as f:
+            json.dump(report, f, indent=2)
+
+        summary_df = pd.DataFrame.from_dict(summary, orient="index")
+        summary_df.to_csv(self.results_dir / "summary_report.csv")
+
+        return report
     
     def _create_visualizations(self, df_results):
         """Create publication-ready visualizations."""
-        # Implementation of visualization pipeline
-        pass
+        plt.switch_backend("Agg")
+        sns.set(style="whitegrid")
+
+        # Boxplot for forward motion performance
+        col = "final_forward_motion_fitness"
+        if col in df_results.columns:
+            plt.figure(figsize=(12, 6))
+            sns.boxplot(x="config_id", y=col, data=df_results)
+            plt.xticks(rotation=45)
+            plt.title("Forward Motion Performance by Configuration")
+            plt.tight_layout()
+            plt.savefig(self.results_dir / "forward_motion_boxplot.png", dpi=300)
+            plt.close()
+
+        # Barplot of mean hypervolume per configuration
+        if "final_hypervolume" in df_results.columns:
+            plt.figure(figsize=(12, 6))
+            hv_summary = df_results.groupby("config_id")["final_hypervolume"].mean().reset_index()
+            sns.barplot(x="config_id", y="final_hypervolume", data=hv_summary)
+            plt.xticks(rotation=45)
+            plt.ylabel("Mean Hypervolume")
+            plt.title("Mean Hypervolume by Configuration")
+            plt.tight_layout()
+            plt.savefig(self.results_dir / "hypervolume_barplot.png", dpi=300)
+            plt.close()
 
 
 if __name__ == "__main__":
