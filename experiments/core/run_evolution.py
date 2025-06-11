@@ -99,13 +99,16 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
         vega: Evolution algorithm instance
         max_iterations: Maximum number of iterations
         verbose: Whether to print detailed progress
-        simulation_speed: Speed multiplier (1.0 = real-time, 2.0 = 2x speed, 0.5 = half speed)
+        simulation_speed: Speed multiplier when not in real-time
         
     Returns:
         Dictionary with evolution results
     """
     # Calculate sleep time based on physics timestep and desired speed
-    sleep_time = env.time_step / simulation_speed if simulation_speed > 0 else 0
+    if simulation_speed > 0 and not env.real_time:
+        sleep_time = env.time_step / simulation_speed
+    else:
+        sleep_time = 0
     
     # Enhanced control parameters
     vel_counter = 0
@@ -378,9 +381,9 @@ Examples:
   python run_evolution.py --quick-test        # Quick test (100 iterations)
   python run_evolution.py --no-render         # Headless mode for servers
   python run_evolution.py --max-iterations 2000 --population-size 50  # Extended run
-  python run_evolution.py --real-time         # Real-time simulation
-  python run_evolution.py --speed 2.0         # 2x speed
-  python run_evolution.py --speed 0.5         # Half speed for detailed observation
+  python run_evolution.py --real-time         # Use PyBullet real-time stepping
+  python run_evolution.py --speed 2.0         # 2x speed (non real-time)
+  python run_evolution.py --speed 0.5         # Half speed when not in real-time
         """
     )
     
@@ -408,9 +411,9 @@ Examples:
     
     # Timing arguments
     parser.add_argument("--real-time", action="store_true",
-                       help="Enable PyBullet real-time simulation")
+                       help="Use PyBullet's real-time mode (ignores --speed)")
     parser.add_argument("--speed", type=float, default=0.0,
-                       help="Simulation speed multiplier (0.0=max speed, 1.0=real-time, 2.0=2x speed)")
+                       help="Speed multiplier when not in real-time; scales physics timestep")
     
     args = parser.parse_args()
     
@@ -439,9 +442,8 @@ Examples:
         # Setup enhanced simulation environment with timing control
         physics_params = setup_enhanced_physics()
         physics_params['terrain_type'] = args.terrain
-        physics_params['real_time'] = args.real_time
-        
-        env = Environment(render=not args.no_render, **physics_params)
+
+        env = Environment(render=not args.no_render, real_time=args.real_time, **physics_params)
         
         # Setup enhanced robot
         robot = setup_enhanced_robot(env)
@@ -455,7 +457,7 @@ Examples:
         
         # Determine simulation speed
         if args.real_time:
-            simulation_speed = -1  # Use PyBullet's real-time mode
+            simulation_speed = 1.0  # Real-time mode handled by PyBullet
         elif args.speed > 0:
             simulation_speed = args.speed
         elif args.no_render:
@@ -467,7 +469,7 @@ Examples:
             print(f"\n🤖 Robot initialized with enhanced motor control")
             print(f"🧠 VEGA initialized with 6-objective fitness function")
             print(f"🌍 Environment ready with enhanced physics")
-            if simulation_speed == -1:
+            if args.real_time:
                 print(f"🕐 Using PyBullet real-time simulation")
             elif simulation_speed == 0:
                 print(f"🚀 Running at maximum speed (no timing control)")
