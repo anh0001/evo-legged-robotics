@@ -19,6 +19,22 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles numpy types."""
+    def default(self, obj):
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif hasattr(obj, 'item'):  # Handle numpy scalars
+            return obj.item()
+        return super().default(obj)
+
+
 class StatisticalValidator:
     """
     Comprehensive statistical validation framework for evolutionary robotics experiments.
@@ -432,9 +448,9 @@ class StatisticalValidator:
             "recommendations": self._generate_recommendations()
         }
         
-        # Save detailed results
+        # Save detailed results with custom encoder
         with open(f"{self.results_dir}/statistical_analysis_report.json", 'w') as f:
-            json.dump(report, f, indent=2, default=str)
+            json.dump(report, f, indent=2, cls=NumpyEncoder)
         
         # Generate summary markdown report
         self._generate_markdown_report(report)

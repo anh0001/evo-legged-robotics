@@ -31,6 +31,23 @@ from robot.leg_robot import LeggedRobot
 from simulation.environment import Environment
 from evolution.enhanced_vega import EnhancedVEGA
 
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles numpy types."""
+    def default(self, obj):
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif hasattr(obj, 'item'):  # Handle numpy scalars
+            return obj.item()
+        return super().default(obj)
+
+
 class AblationStudyManager:
     """
     Manages systematic ablation studies for structural mutation operators.
@@ -241,10 +258,10 @@ class AblationStudyManager:
             # Run evolution with enhanced monitoring
             results = self._run_evolution_with_monitoring(vega, robot, env, experiment_data)
             
-            # Save results
+            # Save results with custom encoder
             results_file = exp_dir / "results.json"
             with open(results_file, 'w') as f:
-                json.dump(results, f, indent=2)
+                json.dump(results, f, indent=2, cls=NumpyEncoder)
             
             # Save fitness data
             fitness_file = exp_dir / "fitness_data.csv"
@@ -375,7 +392,7 @@ class AblationStudyManager:
         
         config_file = self.results_dir / "study_configuration.json"
         with open(config_file, 'w') as f:
-            json.dump(study_config, f, indent=2)
+            json.dump(study_config, f, indent=2, cls=NumpyEncoder)
         
         all_results = []
         
@@ -503,7 +520,7 @@ class AblationStudyManager:
         }
 
         with open(self.results_dir / "statistical_results.json", "w") as f:
-            json.dump(results, f, indent=2, default=str)
+            json.dump(results, f, indent=2, cls=NumpyEncoder)
 
         return results
     
@@ -517,7 +534,7 @@ class AblationStudyManager:
         effect_sizes = validator.calculate_effect_sizes(df_results)
 
         with open(self.results_dir / "effect_sizes.json", "w") as f:
-            json.dump(effect_sizes, f, indent=2)
+            json.dump(effect_sizes, f, indent=2, cls=NumpyEncoder)
 
         return effect_sizes
     
@@ -545,7 +562,7 @@ class AblationStudyManager:
         }
 
         with open(self.results_dir / "summary_report.json", "w") as f:
-            json.dump(report, f, indent=2)
+            json.dump(report, f, indent=2, cls=NumpyEncoder)
 
         summary_df = pd.DataFrame.from_dict(summary, orient="index")
         summary_df.to_csv(self.results_dir / "summary_report.csv")
