@@ -89,9 +89,9 @@ def setup_enhanced_evolution(population_size=30, chromosome_length=8, max_iterat
     return vega
 
 
-def run_evolution_loop(env, robot, vega, max_iterations, verbose=True):
+def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulation_speed=1.0):
     """
-    Main evolution loop with enhanced stability monitoring.
+    Main evolution loop with enhanced stability monitoring and timing control.
     
     Args:
         env: Simulation environment
@@ -99,10 +99,14 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True):
         vega: Evolution algorithm instance
         max_iterations: Maximum number of iterations
         verbose: Whether to print detailed progress
+        simulation_speed: Speed multiplier (1.0 = real-time, 2.0 = 2x speed, 0.5 = half speed)
         
     Returns:
         Dictionary with evolution results
     """
+    # Calculate sleep time based on physics timestep and desired speed
+    sleep_time = env.time_step / simulation_speed if simulation_speed > 0 else 0
+    
     # Enhanced control parameters
     vel_counter = 0
     times = 0
@@ -272,9 +276,13 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True):
             # Step the simulation
             env.step()
             
-            # Optional visualization delay
-            if env.client == p.GUI and step_count % 200 == 0:
-                time.sleep(0.01)
+            # Add timing control for realistic motion
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            
+            # Optional additional visualization delay (reduced since we now have proper timing)
+            if env.client == p.GUI and step_count % 1000 == 0:  # Less frequent
+                time.sleep(0.001)  # Much smaller delay
             
             # Safety reset for critically unstable robots
             if step_count % 2000 == 0:
@@ -301,7 +309,6 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True):
     results['evolution_time'] = time.time() - start_time
     
     return results
-
 
 def save_evolution_results(vega, results, args):
     """Save comprehensive evolution results and analysis."""
@@ -371,6 +378,9 @@ Examples:
   python run_evolution.py --quick-test        # Quick test (100 iterations)
   python run_evolution.py --no-render         # Headless mode for servers
   python run_evolution.py --max-iterations 2000 --population-size 50  # Extended run
+  python run_evolution.py --real-time         # Real-time simulation
+  python run_evolution.py --speed 2.0         # 2x speed
+  python run_evolution.py --speed 0.5         # Half speed for detailed observation
         """
     )
     
@@ -396,6 +406,12 @@ Examples:
     parser.add_argument("--quiet", action="store_true",
                        help="Minimal output")
     
+    # Timing arguments
+    parser.add_argument("--real-time", action="store_true",
+                       help="Enable PyBullet real-time simulation")
+    parser.add_argument("--speed", type=float, default=0.0,
+                       help="Simulation speed multiplier (0.0=max speed, 1.0=real-time, 2.0=2x speed)")
+    
     args = parser.parse_args()
     
     # Adjust parameters for quick test
@@ -420,9 +436,10 @@ Examples:
         print(f"  Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     try:
-        # Setup enhanced simulation environment
+        # Setup enhanced simulation environment with timing control
         physics_params = setup_enhanced_physics()
         physics_params['terrain_type'] = args.terrain
+        physics_params['real_time'] = args.real_time
         
         env = Environment(render=not args.no_render, **physics_params)
         
@@ -436,13 +453,29 @@ Examples:
             max_iterations=args.max_iterations
         )
         
+        # Determine simulation speed
+        if args.real_time:
+            simulation_speed = -1  # Use PyBullet's real-time mode
+        elif args.speed > 0:
+            simulation_speed = args.speed
+        elif args.no_render:
+            simulation_speed = 0  # Max speed for headless mode
+        else:
+            simulation_speed = 1.0  # Real-time for visualization
+        
         if verbose:
             print(f"\n🤖 Robot initialized with enhanced motor control")
             print(f"🧠 VEGA initialized with 6-objective fitness function")
             print(f"🌍 Environment ready with enhanced physics")
+            if simulation_speed == -1:
+                print(f"🕐 Using PyBullet real-time simulation")
+            elif simulation_speed == 0:
+                print(f"🚀 Running at maximum speed (no timing control)")
+            else:
+                print(f"🕐 Running at {simulation_speed:.1f}x real-time speed")
         
-        # Run evolution
-        results = run_evolution_loop(env, robot, vega, args.max_iterations, verbose)
+        # Run evolution with timing control
+        results = run_evolution_loop(env, robot, vega, args.max_iterations, verbose, simulation_speed)
         
         # Save results
         log_dir = save_evolution_results(vega, results, args)
