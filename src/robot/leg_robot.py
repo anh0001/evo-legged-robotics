@@ -15,7 +15,7 @@ class LeggedRobot:
         self.client = client if client is not None else p.connect(p.DIRECT)
         
         # Robot parameters matching C++ code exactly
-        self.box_pos = [0.0, 0.0, 0.5]
+        self.box_pos = [0.0, 0.0, 0.12]
         self.box_length = 1.0
         self.box_width = 0.4
         self.box_height = 0.2
@@ -152,8 +152,8 @@ class LeggedRobot:
                 force=0  # Disable default motors
             )
     
-    def reset_posture(self):
-        """Reset robot to initial posture matching C++ implementation."""
+    def reset_posture(self, smooth=True):
+        """Reset robot to initial posture with option for smooth transition."""
         # Set initial target angles
         for i in range(self.leg_count):
             for j in range(self.dof):
@@ -162,8 +162,12 @@ class LeggedRobot:
                 else:      # Left side legs
                     self.tang[i][j] = np.radians(self.q_init[j])
         
-        # Apply target angles immediately for reset
-        self._apply_position_control_direct()
+        if smooth:
+            # Smooth transition using motor control
+            self._apply_smooth_position_control()
+        else:
+            # Instant reset (only for true initialization)
+            self._apply_position_control_direct()
     
     def apply_target_angles(self):
         """
@@ -215,6 +219,37 @@ class LeggedRobot:
                 
                 # Reset joint to target position
                 p.resetJointState(self.body_id, joint_idx, target_angle)
+    
+    def _apply_smooth_position_control(self):
+        """Apply position control for smooth transitions."""
+        # Use reduced gains for smooth movement
+        target_positions = []
+        joint_indices = []
+        forces = []
+        position_gains = []
+        velocity_gains = []
+        
+        for i in range(self.leg_count):
+            for j in range(self.dof):
+                joint_idx = self.leg_joints[i][j]
+                target_angle = self.tang[i][j] * self.posz
+                
+                joint_indices.append(joint_idx)
+                target_positions.append(target_angle)
+                forces.append(self.max_force * 0.5)  # Reduced force for smooth movement
+                position_gains.append(self.kp * 0.3)  # Reduced gain
+                velocity_gains.append(self.kd * 2.0)  # Increased damping
+        
+        # Apply smooth motor control
+        p.setJointMotorControlArray(
+            bodyUniqueId=self.body_id,
+            jointIndices=joint_indices,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=target_positions,
+            forces=forces,
+            positionGains=position_gains,
+            velocityGains=velocity_gains
+        )
     
     def set_target_angles(self, angles):
         """

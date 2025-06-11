@@ -60,9 +60,9 @@ def setup_enhanced_robot(env):
     
     # Set conservative motor gains to prevent vibrations
     robot.set_motor_gains(
-        kp=8.0,        # Position gain - reduced for stability
-        kd=0.8,        # Velocity gain - critical damping
-        max_force=15.0 # Conservative force limit
+        kp=5.0,        # Position gain - reduced for stability
+        kd=1.0,        # Velocity gain - critical damping
+        max_force=8.0 # Conservative force limit
     )
     
     return robot
@@ -224,8 +224,14 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True):
                         if vega.iteration >= vega.gan:
                             vega.evolve()
                         
-                        # Reset robot for next evaluation
-                        robot.reset_posture()
+                        # Smooth reset with settling time to prevent vibrations
+                        robot.reset_posture(smooth=True)
+                        
+                        # Allow settling time for smooth transition
+                        for settle_step in range(5):
+                            env.step()
+                            time.sleep(0.001)  # Small delay for settling
+                        
                         vega.gaj = 0
                         
                         # Periodic data saving and analysis

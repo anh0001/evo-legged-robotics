@@ -49,14 +49,14 @@ class Environment:
         # Enhanced ground properties for stability
         p.changeDynamics(
             self.ground_id, -1,
-            lateralFriction=0.8,           # Realistic friction instead of infinite
+            lateralFriction=0.7,           # Realistic friction instead of infinite
             spinningFriction=0.01,         # Small spinning friction
             rollingFriction=0.001,         # Minimal rolling friction
-            restitution=0.1,               # Low restitution to prevent bouncing
-            contactDamping=50.0,           # Moderate contact damping
-            contactStiffness=3000.0,       # Moderate contact stiffness
-            linearDamping=0.1,             # Add some damping to reduce oscillations
-            angularDamping=0.1
+            restitution=0.05,              # Low restitution to prevent bouncing
+            contactDamping=100.0,          # Moderate contact damping
+            contactStiffness=1500.0,       # Moderate contact stiffness
+            linearDamping=0.15,            # Add some damping to reduce oscillations
+            angularDamping=0.15
         )
         
         # Add obstacles if requested
