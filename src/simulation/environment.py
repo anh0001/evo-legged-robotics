@@ -11,9 +11,11 @@ class Environment:
     to prevent leg vibrations and improve stability.
     """
     
-    def __init__(self, render=True, time_step=0.002, gravity=-9.81, terrain_type="flat"):
+    def __init__(self, render=True, time_step=0.002, gravity=-9.81, terrain_type="flat", real_time=False):
         """Initialize environment with enhanced physics parameters."""
         self.client = p.connect(p.GUI if render else p.DIRECT)
+        p.setRealTimeSimulation(1 if real_time else 0)
+        self.real_time = real_time
         
         # Use smaller timestep for better stability (recommended: 1/500s)
         self.time_step = time_step
@@ -210,8 +212,11 @@ class Environment:
         if actions is not None:
             self.apply_actions(actions)
         
-        p.stepSimulation()
-        self.sim_time += self.time_step
+        if not self.real_time:
+            p.stepSimulation()
+            self.sim_time += self.time_step
+        else:
+            self.sim_time = time.time() - self.start_time
         
         if self.robot_id is not None:
             self.update_camera()
