@@ -60,9 +60,9 @@ def setup_enhanced_robot(env):
     
     # Set conservative motor gains to prevent vibrations
     robot.set_motor_gains(
-        kp=5.0,        # Position gain - reduced for stability
-        kd=1.0,        # Velocity gain - critical damping
-        max_force=8.0 # Conservative force limit
+        kp=3.0,        # Position gain - reduced for stability
+        kd=2.0,        # Velocity gain - critical damping
+        max_force=5.0 # Conservative force limit
     )
     
     return robot
@@ -146,8 +146,8 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True):
             vel_counter += 1
             step_count += 1
             
-            # Apply motor control every 2 steps (following C++ timing)
-            if vel_counter % 2 == 0:
+            # Change from motor control every 2 steps to every 10-20 steps
+            if vel_counter % 20 == 0: # Now 25 Hz instead of 250 Hz
                 # Update robot orientation state
                 robot.update_orientation()
                 
