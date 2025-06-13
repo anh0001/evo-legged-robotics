@@ -90,8 +90,8 @@ class AblationStudyManager:
                 "stability": 2.0,
                 "energy_efficiency": 0.5,
                 "smoothness": 1.5,
-                "direction_control": 1.0,
-                "foot_contact": 0.8
+                "direction_control": 1.5,
+                "foot_contact": 2.0
             },
             "physics_params": {
                 "time_step": 0.002,
@@ -319,7 +319,9 @@ class AblationStudyManager:
                         curr_rot_matrix = np.array(curr_state['rotation_matrix']).reshape(3, 3)
                         
                         fitness_values = vega.evaluate_fitness(
-                            robot, prev_pos, curr_pos, prev_rot_matrix, curr_rot_matrix
+                            robot, prev_pos, curr_pos,
+                            prev_rot_matrix, curr_rot_matrix,
+                            env.ground_id
                         )
                         
                         # Track operator statistics

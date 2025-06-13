@@ -280,15 +280,22 @@ class EnhancedVEGA(VEGA):
         self.logger.debug(f"Order exchange mutation: positions {pos1} <-> {pos2}")
         return True
     
-    def enhanced_fitness_evaluation(self, robot, prev_pos, curr_pos, prev_rot, curr_rot):
-        """
-        Enhanced fitness evaluation with operator effect attribution.
-        
+    def enhanced_fitness_evaluation(self, robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id):
+        """Enhanced fitness evaluation with operator effect attribution.
+
+        Args:
+            robot: Robot instance
+            prev_pos: Previous robot position
+            curr_pos: Current robot position
+            prev_rot: Previous rotation matrix
+            curr_rot: Current rotation matrix
+            ground_id: PyBullet ID of the ground body
+
         Returns:
             Tuple of (fitness_values, performance_metrics)
         """
         # Get base fitness evaluation
-        fitness_values = super().evaluate_fitness(robot, prev_pos, curr_pos, prev_rot, curr_rot)
+        fitness_values = super().evaluate_fitness(robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id)
         
         # Calculate additional performance metrics
         performance_metrics = self._calculate_performance_metrics(robot, fitness_values)

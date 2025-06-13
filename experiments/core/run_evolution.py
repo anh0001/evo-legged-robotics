@@ -82,8 +82,8 @@ def setup_enhanced_evolution(population_size=30, chromosome_length=8, max_iterat
         'stability': 2.5,      # High priority for stability
         'energy_efficiency': 0.5,
         'smoothness': 2.0,     # High priority for smooth motion
-        'direction_control': 1.0,
-        'foot_contact': 0.8
+        'direction_control': 1.5,
+        'foot_contact': 2.0
     }
     
     return vega
@@ -191,7 +191,9 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                         
                         # Evaluate fitness with enhanced multi-objective function
                         fitness_values = vega.evaluate_fitness(
-                            robot, prev_pos, curr_pos, prev_rot_matrix, curr_rot_matrix
+                            robot, prev_pos, curr_pos,
+                            prev_rot_matrix, curr_rot_matrix,
+                            env.ground_id
                         )
                         
                         # Update results tracking
