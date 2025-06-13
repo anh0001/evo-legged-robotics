@@ -26,8 +26,8 @@ vega_config:
     stability: 2.0        # High priority for preventing vibrations
     energy_efficiency: 0.5
     smoothness: 1.5       # High priority for smooth locomotion
-    direction_control: 1.5
-    foot_contact: 2.0
+    direction_control: 1.0
+    foot_contact: 0.8
 
 # Ablation Configurations (Table 3 from strategic guidance)
 # UPDATED: Reduced mutation probabilities to prevent population disruption
@@ -134,9 +134,9 @@ robot_config:
     terrain_type: "flat"  # Start with flat terrain
   
   motor_control:
-    kp: 10.0              # Position gain
-    kd: 0.5               # Velocity gain (critical damping)
-    max_force: 20.0       # Conservative force limit
+    kp: 3.0              # Position gain
+    kd: 2.0              # Velocity gain (critical damping)
+    max_force: 5.0       # Conservative force limit
 
 # Statistical Analysis Configuration
 statistical_tests:
