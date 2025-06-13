@@ -327,9 +327,9 @@ class PublicationVisualizationPipeline:
         for idx, (param1, param2) in enumerate(param_pairs):
             ax = fig.add_subplot(gs[0, idx])
             
-            # Get sensitivity data
-            if response_var in sensitivity_results:
-                data = sensitivity_results[response_var]
+            # Get sensitivity data from nested response_surfaces key
+            if response_var in sensitivity_results['response_surfaces']:
+                data = sensitivity_results['response_surfaces'][response_var]
                 
                 # Create scatter plot with color-coded response
                 if 'samples' in data:
