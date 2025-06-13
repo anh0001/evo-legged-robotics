@@ -131,7 +131,7 @@ python scripts/validate_framework.py
 
 ### Step 2: Quick Test Run
 # Test the enhanced VEGA with minimal settings
-python experiments/core/run_evolution.py --quick-test --max-iterations=100
+python experiments/core/run_evolution.py --quick-test --max-iterations=100 --real-time
 
 # Test ablation framework with 2 configurations
 python experiments/studies/ablation_study.py --configs=minimal --runs=3
