@@ -36,10 +36,10 @@ ablation_configurations:
     name: "Baseline (All Operators)"
     active_operators: ["insertion", "deletion", "phase_exchange", "order_exchange"]
     operator_probabilities:
-      insertion: 0.05      # Reduced from 0.15
-      deletion: 0.05       # Reduced from 0.15
-      phase_exchange: 0.03 # Reduced from 0.10
-      order_exchange: 0.03 # Reduced from 0.10
+      insertion: 0.005      # Reduced from 0.15
+      deletion: 0.005       # Reduced from 0.15
+      phase_exchange: 0.003 # Reduced from 0.10
+      order_exchange: 0.003 # Reduced from 0.10
     description: "All four structural operators active (total mutation rate: 16%)"
     priority: 1
 
@@ -47,9 +47,9 @@ ablation_configurations:
     name: "No Insertion"
     active_operators: ["deletion", "phase_exchange", "order_exchange"]
     operator_probabilities:
-      deletion: 0.05       # Reduced from 0.15
-      phase_exchange: 0.03 # Reduced from 0.10
-      order_exchange: 0.03 # Reduced from 0.10
+      deletion: 0.005       # Reduced from 0.15
+      phase_exchange: 0.003 # Reduced from 0.10
+      order_exchange: 0.003 # Reduced from 0.10
     description: "Test impact of removing insertion operator (total mutation rate: 11%)"
     priority: 1
 
@@ -57,9 +57,9 @@ ablation_configurations:
     name: "No Deletion"
     active_operators: ["insertion", "phase_exchange", "order_exchange"]
     operator_probabilities:
-      insertion: 0.05      # Reduced from 0.15
-      phase_exchange: 0.03 # Reduced from 0.10
-      order_exchange: 0.03 # Reduced from 0.10
+      insertion: 0.005      # Reduced from 0.15
+      phase_exchange: 0.003 # Reduced from 0.10
+      order_exchange: 0.003 # Reduced from 0.10
     description: "Test impact of removing deletion operator (total mutation rate: 11%)"
     priority: 1
 
@@ -67,9 +67,9 @@ ablation_configurations:
     name: "No Phase Exchange"
     active_operators: ["insertion", "deletion", "order_exchange"]
     operator_probabilities:
-      insertion: 0.05      # Reduced from 0.15
-      deletion: 0.05       # Reduced from 0.15
-      order_exchange: 0.03 # Reduced from 0.10
+      insertion: 0.005      # Reduced from 0.15
+      deletion: 0.005       # Reduced from 0.15
+      order_exchange: 0.003 # Reduced from 0.10
     description: "Test impact of removing phase exchange operator (total mutation rate: 13%)"
     priority: 1
 
@@ -77,9 +77,9 @@ ablation_configurations:
     name: "No Order Exchange"
     active_operators: ["insertion", "deletion", "phase_exchange"]
     operator_probabilities:
-      insertion: 0.05      # Reduced from 0.15
-      deletion: 0.05       # Reduced from 0.15
-      phase_exchange: 0.03 # Reduced from 0.10
+      insertion: 0.005      # Reduced from 0.15
+      deletion: 0.005       # Reduced from 0.15
+      phase_exchange: 0.003 # Reduced from 0.10
     description: "Test impact of removing order exchange operator (total mutation rate: 13%)"
     priority: 1
 
@@ -87,8 +87,8 @@ ablation_configurations:
     name: "Exploration Only (I+D)"
     active_operators: ["insertion", "deletion"]
     operator_probabilities:
-      insertion: 0.05      # Reduced from 0.15
-      deletion: 0.05       # Reduced from 0.15
+      insertion: 0.005      # Reduced from 0.15
+      deletion: 0.005       # Reduced from 0.15
     description: "Test pure exploration hypothesis (total mutation rate: 10%)"
     priority: 2
 
@@ -96,8 +96,8 @@ ablation_configurations:
     name: "Refinement Only (P+O)"
     active_operators: ["phase_exchange", "order_exchange"]
     operator_probabilities:
-      phase_exchange: 0.03 # Reduced from 0.10
-      order_exchange: 0.03 # Reduced from 0.10
+      phase_exchange: 0.003 # Reduced from 0.10
+      order_exchange: 0.003 # Reduced from 0.10
     description: "Test pure refinement hypothesis (total mutation rate: 6%)"
     priority: 2
 
@@ -105,8 +105,8 @@ ablation_configurations:
     name: "Insertion + Phase"
     active_operators: ["insertion", "phase_exchange"]
     operator_probabilities:
-      insertion: 0.05      # Reduced from 0.15
-      phase_exchange: 0.03 # Reduced from 0.10
+      insertion: 0.005      # Reduced from 0.15
+      phase_exchange: 0.003 # Reduced from 0.10
     description: "Test synergy between exploration and refinement (total mutation rate: 8%)"
     priority: 3
 
@@ -114,8 +114,8 @@ ablation_configurations:
     name: "Deletion + Order"
     active_operators: ["deletion", "order_exchange"]
     operator_probabilities:
-      deletion: 0.05       # Reduced from 0.15
-      order_exchange: 0.03 # Reduced from 0.10
+      deletion: 0.005       # Reduced from 0.15
+      order_exchange: 0.003 # Reduced from 0.10
     description: "Test alternative synergy combination (total mutation rate: 8%)"
     priority: 3
 
