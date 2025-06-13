@@ -293,7 +293,7 @@ class AblationStudyManager:
         robot.reset_posture()
         
         step_count = 0
-        max_steps = 10000
+        max_steps = 100000
         
         # Enhanced monitoring variables
         operator_applications = {op: 0 for op in ["insertion", "deletion", "phase_exchange", "order_exchange"]}
