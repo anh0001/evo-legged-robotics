@@ -57,6 +57,53 @@ pip install -e .
 - Pandas
 - Matplotlib
 
+## Testing
+
+This section provides step-by-step instructions to validate your installation and run quick tests to ensure the framework is working correctly.
+
+### Step 1: Framework Validation
+
+First, validate that all dependencies and core components are properly installed:
+
+```bash
+chmod +x scripts/validate_framework.py
+```
+
+```bash
+python scripts/validate_framework.py
+```
+
+This script checks your Python environment, verifies all required packages are installed, and validates the core framework components.
+
+### Step 2: Quick Test Runs
+
+#### Test Enhanced VEGA Algorithm
+Run the enhanced Virus Evolutionary Genetic Algorithm (VEGA) with minimal settings to verify the evolutionary core is working:
+
+```bash
+python experiments/core/run_evolution.py --quick-test --max-iterations=100 --real-time
+```
+
+#### Test Ablation Study Framework
+Test the ablation framework with minimal configurations (recommended for first-time users):
+
+```bash
+python experiments/studies/ablation_study.py --configs=minimal --runs=3
+```
+
+For a comprehensive ablation study (takes longer but tests all configurations):
+
+```bash
+python experiments/studies/ablation_study.py --full-study
+```
+
+#### Test Visualization System
+Then test with real experimental data:
+
+```bash
+python experiments/visualization/publication_plots_runner.py
+```
+
 ## Usage Example
 
 ```bash
@@ -121,25 +168,6 @@ Training data and visualizations are stored in the `logs/neuro_adaptive_terrain`
 - `examples/` - Example scripts for various scenarios
 - `docs/` - Documentation and resources
 - `logs/` - Training logs, visualizations, and data
-
-## Test
-
-### Step 1: Quick Setup
-# ...
-chmod +x scripts/validate_framework.py
-python scripts/validate_framework.py
-
-### Step 2: Quick Test Run
-# Test the enhanced VEGA with minimal settings
-python experiments/core/run_evolution.py --quick-test --max-iterations=100 --real-time
-
-# Test ablation framework with 2 configurations
-python experiments/studies/ablation_study.py --configs=minimal --runs=3
-
-python experiments/studies/ablation_study.py --full-study
-
-python experiments/visualization/publication_plots_runner.py --mock-data
-python experiments/visualization/publication_plots_runner.py
 
 ## Background
 
