@@ -190,16 +190,68 @@ def create_mock_data_if_needed(results_data):
     
     return results_data
 
-def create_experimental_data(ablation_results):
+def load_convergence_data(results_dir, ablation_results):
+    """Load convergence data from experiment logs."""
+    print(f"📈 Loading convergence data from {results_dir}")
+    convergence_data = {}
+
+    objectives = OBJECTIVES
+
+    for config_id, config_stats in ablation_results.items():
+        config_path = os.path.join(results_dir, config_id)
+        run_files = glob.glob(os.path.join(config_path, 'run_*', 'results.json'))
+
+        run_histories = []
+        for rf in run_files:
+            try:
+                with open(rf, 'r') as f:
+                    data = json.load(f)
+                if 'fitness_history' in data:
+                    run_histories.append(data['fitness_history'])
+            except Exception as e:
+                print(f"   ⚠️  Could not load {rf}: {e}")
+
+        if not run_histories:
+            continue
+
+        min_len = min(len(h) for h in run_histories)
+        generations = [run_histories[0][i].get('iteration', i) for i in range(min_len)]
+
+        value_arrays = {obj: np.zeros((len(run_histories), min_len)) for obj in objectives}
+        for r_idx, hist in enumerate(run_histories):
+            for i in range(min_len):
+                fitness = hist[i].get('fitness', [0] * len(objectives))
+                for j, obj in enumerate(objectives):
+                    if j < len(fitness):
+                        value_arrays[obj][r_idx, i] = fitness[j]
+
+        convergence_data[config_id] = {
+            'name': config_stats.get('name', config_id),
+            'generations': generations,
+        }
+        for obj in objectives:
+            convergence_data[config_id][f'best_{obj}'] = value_arrays[obj].mean(axis=0).tolist()
+
+    return convergence_data
+
+def create_experimental_data(ablation_results, results_dir=None, use_mock=False):
     """Create the experimental data structure expected by the visualization pipeline."""
+    if not use_mock and results_dir:
+        convergence_data = load_convergence_data(results_dir, ablation_results)
+        if not convergence_data:
+            print("⚠️  Falling back to mock convergence data")
+            convergence_data = create_mock_convergence_data(ablation_results)
+    else:
+        convergence_data = create_mock_convergence_data(ablation_results)
+
     experimental_data = {
         'ablation_results': ablation_results,
-        'convergence_data': create_mock_convergence_data(ablation_results),
+        'convergence_data': convergence_data,
         'statistical_results': create_mock_statistical_results(ablation_results),
         'sensitivity_results': create_mock_sensitivity_results(),
         'operator_data': create_mock_operator_data()
     }
-    
+
     return experimental_data
 
 def create_mock_convergence_data(ablation_results):
@@ -343,6 +395,7 @@ def main():
     # Find or specify results directory
     if args.mock_data:
         print("📊 Using mock data for demonstration")
+        results_dir = None
         ablation_results = {
             'C0_baseline': {
                 'name': 'Baseline (All Operators)',
@@ -396,7 +449,7 @@ def main():
         print(f"   - {config_id}: {data['name']} ({data.get('num_runs', 0)} runs)")
     
     # Create experimental data structure
-    experimental_data = create_experimental_data(ablation_results)
+    experimental_data = create_experimental_data(ablation_results, results_dir=results_dir, use_mock=args.mock_data)
     
     # Initialize visualization pipeline
     pipeline = PublicationVisualizationPipeline(output_dir=args.output_dir)
