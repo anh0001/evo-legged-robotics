@@ -604,9 +604,9 @@ if __name__ == "__main__":
     # Example usage
     study_manager = AblationStudyManager()
     
-    # Run a quick test with reduced parameters
-    study_manager.num_independent_runs = 5  # Reduced for testing
-    study_manager.base_config["max_iterations"] = 100  # Reduced for testing
+    # # Run a quick test with reduced parameters
+    # study_manager.num_independent_runs = 5  # Reduced for testing
+    # study_manager.base_config["max_iterations"] = 100  # Reduced for testing
     
     results = study_manager.run_full_study(parallel=False)
     print(f"Completed ablation study with {len(results)} total experiments")
