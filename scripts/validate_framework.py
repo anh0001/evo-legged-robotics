@@ -153,7 +153,7 @@ def run_quick_evolution_test():
             prev_pos = np.array([0, 0, 0.5])
             prev_rot = np.eye(3)
             
-            vega.evaluate_fitness(robot, prev_pos, pos, prev_rot, rot_matrix)
+            vega.evaluate_fitness(robot, prev_pos, pos, prev_rot, rot_matrix, env.ground_id)
             
             if i < 2:  # Don't evolve on last iteration
                 vega.evolve()

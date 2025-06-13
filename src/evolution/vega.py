@@ -8,6 +8,7 @@ import logging
 import json
 from datetime import datetime
 import pandas as pd
+import pybullet as p
 
 
 class VEGA:
@@ -63,8 +64,8 @@ class VEGA:
             'stability': 2.0,        # High weight for stability
             'energy_efficiency': 0.5,
             'smoothness': 1.5,       # High weight for smooth motion
-            'direction_control': 1.0,
-            'foot_contact': 0.8
+            'direction_control': 1.5,
+            'foot_contact': 2.0
         }
         
         # Current individual and sequence indices
@@ -162,7 +163,7 @@ class VEGA:
         
         self.logger.info("Populations initialized with enhanced diversity control")
     
-    def evaluate_fitness(self, robot, prev_pos, curr_pos, prev_rot, curr_rot):
+    def evaluate_fitness(self, robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id):
         """
         Enhanced fitness evaluation with multiple objectives to prevent vibrations.
         
@@ -172,6 +173,7 @@ class VEGA:
             curr_pos: Current robot position  
             prev_rot: Previous rotation matrix
             curr_rot: Current rotation matrix
+            ground_id: PyBullet ID of the ground body
             
         Returns:
             Updated fitness array for current individual
@@ -195,11 +197,15 @@ class VEGA:
         else:
             rap = math.atan2(prev_rot[1, 0], prev_rot[0, 0])
             
-        angle_change = ra - rap
-        if angle_change > math.pi:
-            angle_change -= 2 * math.pi
-        elif angle_change < -math.pi:
-            angle_change += 2 * math.pi
+        yaw = ra
+        prev_yaw = rap
+        direction_error = yaw - prev_yaw
+        if direction_error > math.pi:
+            direction_error -= 2 * math.pi
+        elif direction_error < -math.pi:
+            direction_error += 2 * math.pi
+
+        angle_change = direction_error
         
         # Calculate direction alignment
         rr = np.array([curr_rot[0, 0], curr_rot[1, 0]])  # Current direction
@@ -227,13 +233,11 @@ class VEGA:
             robot, robot_state, displacement
         )
         
-        # 5. Direction Control (left/right turning ability)
-        left_turn_fitness = math.exp(-(angle_change - math.pi * 0.5)**2) * 20 + math.exp(-distance**2)
-        right_turn_fitness = math.exp(-(angle_change + math.pi * 0.5)**2) * 20 + math.exp(-distance**2)
-        direction_fitness = (left_turn_fitness + right_turn_fitness) / 2
+        # 5. Direction Control based on yaw change
+        direction_fitness = math.exp(-direction_error**2) * 100
         
         # 6. Foot Contact Quality (stable ground contact)
-        contact_fitness = self._calculate_contact_fitness(robot_state)
+        contact_fitness = self._calculate_contact_fitness(robot, ground_id)
         
         # Apply weights and combine fitness components
         weighted_fitness = [
@@ -398,23 +402,17 @@ class VEGA:
         
         return max(0, smoothness_score * 100)
     
-    def _calculate_contact_fitness(self, robot_state):
-        """Calculate foot contact quality for stable locomotion."""
-        # This is a simplified version - in full implementation would use
-        # p.getContactPoints() to analyze actual ground contacts
-        
-        leg_positions = robot_state['leg_positions']
-        contact_quality = 0
-        
-        # Check if feet are at reasonable heights
-        for pos in leg_positions:
-            if pos[2] < 0.1:  # Close to ground
-                contact_quality += 1
-        
-        # Normalize by number of legs
-        contact_quality /= len(leg_positions)
-        
-        return contact_quality * 50
+    def _calculate_contact_fitness(self, robot, ground_id):
+        """Calculate foot contact quality using PyBullet contact points."""
+
+        contacts = 0
+        for i in range(robot.leg_count):
+            foot_link = robot.leg_joints[i][2]
+            pts = p.getContactPoints(bodyA=robot.body_id, linkIndexA=foot_link, bodyB=ground_id)
+            if len(pts) > 0:
+                contacts += 1
+
+        return (contacts / robot.leg_count) * 100
     
     def rank(self):
         """Enhanced ranking for multi-objective optimization."""

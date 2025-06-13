@@ -26,8 +26,8 @@ vega_config:
     stability: 2.0        # High priority for preventing vibrations
     energy_efficiency: 0.5
     smoothness: 1.5       # High priority for smooth locomotion
-    direction_control: 1.0
-    foot_contact: 0.8
+    direction_control: 1.5
+    foot_contact: 2.0
 
 # Ablation Configurations (Table 3 from strategic guidance)
 # UPDATED: Reduced mutation probabilities to prevent population disruption

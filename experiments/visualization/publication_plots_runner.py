@@ -231,8 +231,8 @@ def create_mock_convergence_data(ablation_results):
                     "stability": 0.8,
                     "energy_efficiency": 0.6,
                     "smoothness": 0.7,
-                    "direction_control": 0.5,
-                    "foot_contact": 0.4
+                    "direction_control": 0.7,
+                    "foot_contact": 0.6
                 }
                 factor = factor_map.get(objective, 1.0)
                 scaled_curve = base_curve * factor

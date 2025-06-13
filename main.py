@@ -159,7 +159,8 @@ def run_evolution_demo(env, robot):
                     vega.evaluate_fitness(
                         robot,
                         prev_pos, curr_pos,
-                        prev_rot_matrix, curr_rot_matrix
+                        prev_rot_matrix, curr_rot_matrix,
+                        env.ground_id
                     )
                     
                     # Update camera
