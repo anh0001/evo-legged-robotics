@@ -228,10 +228,15 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                         
                         # Advance evolution
                         vega.iteration += 1
-                        
-                        # Evolve population after initial evaluation phase
-                        if vega.iteration >= vega.gan:
-                            vega.evolve()
+
+                        # Choose next individual or evolve population
+                        if vega.iteration < vega.gan:
+                            vega.gai = vega.iteration % vega.gan
+                        else:
+                            vega.evolve()  # gai updated inside evolve
+
+                        # Reset gait index for new individual
+                        vega.gaj = 0
                         
                         # Smooth reset with settling time to prevent vibrations
                         robot.reset_posture(smooth=True)
@@ -240,8 +245,6 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                         for settle_step in range(5):
                             env.step()
                             time.sleep(0.001)  # Small delay for settling
-                        
-                        vega.gaj = 0
                         
                         # Periodic data saving and analysis
                         if vega.iteration % 100 == 0:
