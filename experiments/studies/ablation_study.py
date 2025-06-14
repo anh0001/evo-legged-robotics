@@ -16,6 +16,8 @@ from concurrent.futures import ProcessPoolExecutor
 import logging
 import matplotlib.pyplot as plt
 import seaborn as sns
+import yaml
+import argparse
 
 # Ensure project root and src directory are on the path
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -54,7 +56,7 @@ class AblationStudyManager:
     Implements the 16 configurations from Table 3 in the strategic guidance.
     """
     
-    def __init__(self, base_config_path="config/base_experiment.json"):
+    def __init__(self, base_config_path="config/base_experiment.json", ablation_config_path=None):
         self.base_config = self._load_base_config(base_config_path)
         self.experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.results_dir = Path(f"results/ablation_study_{self.experiment_id}")
@@ -63,8 +65,12 @@ class AblationStudyManager:
         # Setup logging
         self._setup_logging()
         
-        # Define ablation configurations (Table 3 from strategic guidance)
-        self.ablation_configs = self._define_ablation_configurations()
+        # Load ablation configurations from external file if provided
+        if ablation_config_path and os.path.exists(ablation_config_path):
+            self.ablation_configs = self._load_ablation_configs(ablation_config_path)
+        else:
+            # Use built-in configurations as fallback
+            self.ablation_configs = self._define_ablation_configurations()
         
         # Statistical parameters
         self.num_independent_runs = 30  # Minimum for statistical significance
@@ -211,6 +217,54 @@ class AblationStudyManager:
         }
         
         return configs
+    
+    def _load_ablation_configs(self, config_path):
+        """Load ablation configurations from external YAML/JSON file."""
+        try:
+            with open(config_path, 'r') as f:
+                if config_path.endswith('.yaml') or config_path.endswith('.yml'):
+                    config_data = yaml.safe_load(f)
+                else:
+                    config_data = json.load(f)
+            
+            # Extract ablation configs from the loaded data
+            if 'ablation_configurations' in config_data:
+                return config_data['ablation_configurations']
+            elif 'experiments' in config_data:
+                # Convert experiments format to ablation configuration format
+                return self._convert_experiments_to_ablation_format(config_data['experiments'])
+            else:
+                self.logger.warning(f"No ablation configurations found in {config_path}, using built-in configs")
+                return self._define_ablation_configurations()
+                
+        except Exception as e:
+            self.logger.error(f"Error loading ablation configs from {config_path}: {e}")
+            return self._define_ablation_configurations()
+
+    def _convert_experiments_to_ablation_format(self, experiments):
+        """Convert experiment format to ablation configuration format."""
+        ablation_configs = {}
+        
+        for exp_name, exp_config in experiments.items():
+            # Extract operator settings
+            active_operators = []
+            operator_probs = {}
+            
+            if 'structural_mutations' in exp_config:
+                mutations = exp_config['structural_mutations']
+                for op, settings in mutations.items():
+                    if settings.get('enabled', True):
+                        active_operators.append(op)
+                        operator_probs[op] = settings.get('probability', 0.1)
+            
+            ablation_configs[exp_name] = {
+                "name": exp_config.get('name', exp_name),
+                "active_operators": active_operators,
+                "operator_probabilities": operator_probs,
+                "description": exp_config.get('description', f"Configuration {exp_name}")
+            }
+        
+        return ablation_configs
     
     def run_single_experiment(self, config_id, run_id, config_data):
         """Run a single experimental trial."""
@@ -376,10 +430,16 @@ class AblationStudyManager:
         
         return experiment_data
     
-    def run_full_study(self, parallel=True, max_workers=4):
-        """Run the complete ablation study."""
+    def run_full_study(self, parallel=True, max_workers=None):
+        """Run the complete ablation study with improved parallel execution."""
+        if max_workers is None:
+            # Auto-detect optimal number of workers
+            import multiprocessing
+            max_workers = min(multiprocessing.cpu_count() - 1, 8)  # Leave one core free, max 8
+        
         self.logger.info(f"Starting full ablation study with {len(self.ablation_configs)} configurations")
         self.logger.info(f"Each configuration will run {self.num_independent_runs} independent trials")
+        self.logger.info(f"Parallel execution: {parallel}, Max workers: {max_workers}")
         
         # Save study configuration
         study_config = {
@@ -387,6 +447,8 @@ class AblationStudyManager:
             "num_configurations": len(self.ablation_configs),
             "num_runs_per_config": self.num_independent_runs,
             "total_experiments": len(self.ablation_configs) * self.num_independent_runs,
+            "parallel_execution": parallel,
+            "max_workers": max_workers,
             "base_config": self.base_config,
             "ablation_configs": self.ablation_configs,
             "start_time": datetime.now().isoformat()
@@ -410,29 +472,58 @@ class AblationStudyManager:
         return all_results
     
     def _run_parallel_experiments(self, all_results, max_workers):
-        """Run experiments in parallel for efficiency."""
+        """Enhanced parallel execution with better error handling and progress tracking."""
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        import time
+        
+        total_experiments = len(self.ablation_configs) * self.num_independent_runs
+        self.logger.info(f"Submitting {total_experiments} experiments to {max_workers} workers")
+        
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            futures = []
-            
+            # Submit all experiments
+            future_to_exp = {}
             for config_id, config_data in self.ablation_configs.items():
                 for run_id in range(self.num_independent_runs):
                     future = executor.submit(
                         self.run_single_experiment, 
                         config_id, run_id, config_data
                     )
-                    futures.append(future)
+                    future_to_exp[future] = (config_id, run_id)
             
-            # Collect results
-            for i, future in enumerate(futures):
+            # Collect results with progress tracking
+            completed = 0
+            failed = 0
+            start_time = time.time()
+            
+            for future in as_completed(future_to_exp, timeout=7200):  # 2 hour total timeout
+                config_id, run_id = future_to_exp[future]
+                
                 try:
-                    result = future.result(timeout=3600)  # 1 hour timeout
-                    all_results.append(result)
+                    result = future.result(timeout=1800)  # 30 min per experiment
+                    if result.get("error"):
+                        failed += 1
+                        self.logger.error(f"Experiment {config_id}_run_{run_id} failed: {result['error']}")
+                    else:
+                        all_results.append(result)
                     
-                    if (i + 1) % 10 == 0:
-                        self.logger.info(f"Completed {i + 1}/{len(futures)} experiments")
-                        
                 except Exception as e:
-                    self.logger.error(f"Experiment {i} failed: {str(e)}")
+                    failed += 1
+                    self.logger.error(f"Experiment {config_id}_run_{run_id} exception: {str(e)}")
+                
+                completed += 1
+                
+                # Progress reporting
+                if completed % 10 == 0 or completed == total_experiments:
+                    elapsed = time.time() - start_time
+                    rate = completed / elapsed if elapsed > 0 else 0
+                    eta = (total_experiments - completed) / rate if rate > 0 else 0
+                    
+                    self.logger.info(
+                        f"Progress: {completed}/{total_experiments} ({completed/total_experiments*100:.1f}%) "
+                        f"| Failed: {failed} | Rate: {rate:.2f}/min | ETA: {eta/60:.1f}min"
+                    )
+        
+        self.logger.info(f"Parallel execution completed: {len(all_results)} successful, {failed} failed")
     
     def _run_sequential_experiments(self, all_results):
         """Run experiments sequentially for debugging."""
@@ -600,13 +691,102 @@ class AblationStudyManager:
             plt.close()
 
 
+# Add command-line interface
+def main():
+    """Command-line interface for running ablation studies."""
+    parser = argparse.ArgumentParser(
+        description="Run Ablation Study for Structural Mutation Operators",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python ablation_study.py --parallel --max-workers=8
+  python ablation_study.py --config=experiments/configs/ablation_configs.yaml --runs=50
+  python ablation_study.py --quick-test --parallel
+  python ablation_study.py --no-parallel --verbose
+        """
+    )
+    
+    # Configuration arguments
+    parser.add_argument("--config", type=str, default=None,
+                       help="Path to ablation configuration file (YAML/JSON)")
+    parser.add_argument("--base-config", type=str, default="config/base_experiment.json",
+                       help="Path to base experiment configuration")
+    
+    # Execution arguments  
+    parser.add_argument("--parallel", action="store_true", default=True,
+                       help="Enable parallel execution (default)")
+    parser.add_argument("--no-parallel", action="store_false", dest="parallel",
+                       help="Disable parallel execution")
+    parser.add_argument("--max-workers", type=int, default=None,
+                       help="Maximum number of parallel workers (auto-detect if not specified)")
+    
+    # Study parameters
+    parser.add_argument("--runs", type=int, default=30,
+                       help="Number of independent runs per configuration (default: 30)")
+    parser.add_argument("--max-iterations", type=int, default=500,
+                       help="Maximum evolution iterations per experiment")
+    
+    # Testing and debugging
+    parser.add_argument("--quick-test", action="store_true",
+                       help="Quick test with reduced parameters (5 runs, 100 iterations)")
+    parser.add_argument("--verbose", action="store_true", default=True,
+                       help="Verbose logging")
+    
+    args = parser.parse_args()
+    
+    # Initialize study manager
+    study_manager = AblationStudyManager(
+        base_config_path=args.base_config,
+        ablation_config_path=args.config
+    )
+    
+    # Apply command-line parameters
+    study_manager.num_independent_runs = args.runs
+    
+    if args.max_iterations:
+        study_manager.base_config["max_iterations"] = args.max_iterations
+    
+    # Quick test mode
+    if args.quick_test:
+        study_manager.num_independent_runs = 5
+        study_manager.base_config["max_iterations"] = 100
+        print("🚀 Quick test mode: 5 runs per config, 100 iterations each")
+    
+    # Run the study
+    print(f"🧬 Starting Ablation Study")
+    print(f"   Configurations: {len(study_manager.ablation_configs)}")
+    print(f"   Runs per config: {study_manager.num_independent_runs}")
+    print(f"   Total experiments: {len(study_manager.ablation_configs) * study_manager.num_independent_runs}")
+    print(f"   Parallel execution: {args.parallel}")
+    if args.parallel and args.max_workers:
+        print(f"   Max workers: {args.max_workers}")
+    
+    try:
+        results = study_manager.run_full_study(
+            parallel=args.parallel,
+            max_workers=args.max_workers
+        )
+        
+        print(f"\n✅ Ablation study completed successfully!")
+        print(f"   Total experiments completed: {len(results)}")
+        print(f"   Results saved to: {study_manager.results_dir}")
+        
+    except KeyboardInterrupt:
+        print(f"\n⏹️  Study interrupted by user")
+    except Exception as e:
+        print(f"\n❌ Study failed: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+
+
 if __name__ == "__main__":
-    # Example usage
-    study_manager = AblationStudyManager()
-    
-    # # Run a quick test with reduced parameters
-    # study_manager.num_independent_runs = 5  # Reduced for testing
-    # study_manager.base_config["max_iterations"] = 100  # Reduced for testing
-    
-    results = study_manager.run_full_study(parallel=False)
-    print(f"Completed ablation study with {len(results)} total experiments")
+    # Use command-line interface if arguments provided, otherwise use example
+    import sys
+    if len(sys.argv) > 1:
+        main()
+    else:
+        # Original example usage for backward compatibility
+        study_manager = AblationStudyManager()
+        results = study_manager.run_full_study(parallel=True, max_workers=4)
+        print(f"Completed ablation study with {len(results)} total experiments")

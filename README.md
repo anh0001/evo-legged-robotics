@@ -95,6 +95,7 @@ For a comprehensive ablation study (takes longer but tests all configurations):
 
 ```bash
 python experiments/studies/ablation_study.py --full-study
+python experiments/studies/ablation_study.py --config=experiments/configs/ablation_configs.yaml --runs=50
 ```
 
 #### Test Visualization System

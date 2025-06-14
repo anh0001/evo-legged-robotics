@@ -12,3 +12,4 @@ plotly
 kaleido
 statsmodels
 jinja2
+pyyaml
