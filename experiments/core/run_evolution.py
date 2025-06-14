@@ -240,6 +240,7 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                         
                         # Smooth reset with settling time to prevent vibrations
                         robot.reset_posture(smooth=True)
+                        vega.prev_robot_state = None
                         
                         # Allow settling time for smooth transition
                         for settle_step in range(5):
