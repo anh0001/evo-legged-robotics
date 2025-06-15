@@ -25,7 +25,7 @@ class Environment:
         # Enhanced physics parameters to prevent vibrations
         p.setPhysicsEngineParameter(
             fixedTimeStep=time_step,
-            numSolverIterations=150,      # Increased from 100 for better stability
+            numSolverIterations=200,      # Increase from 150 for better stability
             numSubSteps=1,
             erp=0.15,                     # Slightly reduced for softer contacts
             contactERP=0.15,              # Reduced contact ERP

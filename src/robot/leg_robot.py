@@ -43,10 +43,10 @@ class LeggedRobot:
         self.qang = np.zeros((self.leg_count, self.dof))
         self.tang = np.zeros((self.leg_count, self.dof))
         
-        # FIXED: Better motor control parameters to prevent oscillations
-        self.kp = 5.0         # Reduced from 8.0 for less aggressive response
-        self.kd = 2.5         # Increased from 1.5 for better damping  
-        self.max_force = 12.0 # Reduced from 15.0 for smoother control
+        # Updated motor parameters
+        self.kp = 1.0              # Much lower
+        self.kd = 0.5              # Much lower
+        self.max_force = 3.5       # Much lower
         
         # Control parameters
         self.posz = 1  # Normal: 1, Overturn: -1
@@ -69,7 +69,9 @@ class LeggedRobot:
             urdf_path,
             basePosition=self.box_pos,
             useFixedBase=False,
-            flags=p.URDF_USE_SELF_COLLISION  # Enable self-collision detection
+            flags=p.URDF_USE_SELF_COLLISION | 
+                  p.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS |
+                  p.URDF_GOOGLEY_UNDEFINED_COLORS
         )
         
         self.num_joints = p.getNumJoints(self.body_id)
@@ -382,3 +384,19 @@ class LeggedRobot:
                 'angular_speed': 10.0,
                 'is_stable': False
             }
+            
+    def _tune_inertia(self):
+        """Tune inertia properties for stability."""
+        # Increase base inertia for stability
+        base_inertia = [0.01, 0.01, 0.01]  # Diagonal inertia
+        p.changeDynamics(
+            self.body_id, -1,  # Base link
+            localInertiaDiagonal=base_inertia
+        )
+        
+        # Optionally reduce leg segment inertia
+        for joint_idx in self.joint:
+            p.changeDynamics(
+                self.body_id, joint_idx,
+                localInertiaDiagonal=[0.0001, 0.0001, 0.0001]
+            )
