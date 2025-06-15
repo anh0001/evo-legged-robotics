@@ -248,23 +248,40 @@ class VEGA:
             direction_fitness * self.fitness_weights['direction_control'],
             contact_fitness * self.fitness_weights['foot_contact']
         ]
-        
-        # Update fitness for current individual
-        self.fitness[self.gai] = weighted_fitness
-        
+
+        # Compute penalties before assigning fitness
+        final_fitness = list(weighted_fitness)
+
+        # Apply penalties for poor stability (critical for preventing vibrations)
+        if stability_metrics['vertical_stability'] < 0.5:
+            self.logger.info(
+                f"Stability penalty applied - vertical: {stability_metrics['vertical_stability']:.3f}"
+            )
+            final_fitness = [f * 0.1 for f in final_fitness]
+
+        # Apply penalties for excessive vibrations
+        if stability_metrics['angular_speed'] > 5.0:
+            self.logger.info(
+                f"Vibration penalty applied - angular speed: {stability_metrics['angular_speed']:.3f}"
+            )
+            final_fitness = [f * 0.5 for f in final_fitness]
+
+        # Update fitness for current individual with penalties applied
+        self.fitness[self.gai] = final_fitness
+
         # Track stability for monitoring
         self.stability_history.append(stability_metrics['vertical_stability'])
-        
-        # Update fitness history
+
+        # Update fitness history after penalties
         for i in range(6):
             self.cfith[self.iteration, i] = self.fitness[self.gai, i]
         self.chostl[self.iteration] = self.host_lengths[self.gai]
-        
-        # Log comprehensive fitness metrics
+
+        # Log comprehensive (penalized) fitness metrics
         self.logger.info(
-            f"Fitness - Forward: {forward_fitness:.3f}, Stability: {stability_fitness:.3f}, "
-            f"Energy: {energy_fitness:.3f}, Smoothness: {smoothness_fitness:.3f}, "
-            f"Direction: {direction_fitness:.3f}, Contact: {contact_fitness:.3f}"
+            f"Fitness - Forward: {self.fitness[self.gai, 0]:.3f}, Stability: {self.fitness[self.gai, 1]:.3f}, "
+            f"Energy: {self.fitness[self.gai, 2]:.3f}, Smoothness: {self.fitness[self.gai, 3]:.3f}, "
+            f"Direction: {self.fitness[self.gai, 4]:.3f}, Contact: {self.fitness[self.gai, 5]:.3f}"
         )
         self.logger.info(
             f"Robot metrics - Distance: {distance:.3f}, Vertical stability: {stability_metrics['vertical_stability']:.3f}, "
@@ -284,19 +301,6 @@ class VEGA:
                     k = i
             self.bfith[self.iteration, j] = self.fitness[k, j]
             self.bhostl[self.iteration, j] = self.host_lengths[k]
-        
-        # Apply penalties for poor stability (critical for preventing vibrations)
-        if stability_metrics['vertical_stability'] < 0.5:
-            self.logger.info(f"Stability penalty applied - vertical: {stability_metrics['vertical_stability']:.3f}")
-            # Severely penalize unstable gaits
-            for i in range(6):
-                self.fitness[self.gai, i] *= 0.1
-        
-        # Apply penalties for excessive vibrations
-        if stability_metrics['angular_speed'] > 5.0:
-            self.logger.info(f"Vibration penalty applied - angular speed: {stability_metrics['angular_speed']:.3f}")
-            for i in range(6):
-                self.fitness[self.gai, i] *= 0.5
         
         # Reverse gait if moving backward
         if alignment < -0.5:
