@@ -60,8 +60,80 @@ class EnhancedVEGA(VEGA):
         # Last applied operators for effect attribution
         self.last_applied_operators = []
         
+        # Add cache for robot state to enable individual fitness evaluation
+        self.cached_robot_state = None
+        self.cached_environment_state = None
+        
         self.logger = logging.getLogger('enhanced_vega')
     
+    def evaluate_individual_fitness(self, individual_idx):
+        """
+        Evaluate fitness for a specific individual.
+        This method enables post-mutation fitness evaluation for operator tracking.
+        
+        Args:
+            individual_idx: Index of individual to evaluate
+            
+        Returns:
+            Fitness array for the individual
+        """
+        if self.cached_robot_state is None or self.cached_environment_state is None:
+            # If no cached state available, return current fitness
+            self.logger.warning(f"No cached state for individual {individual_idx} evaluation")
+            return self.fitness[individual_idx].copy()
+        
+        # Temporarily set current individual to the one being evaluated
+        original_gai = self.gai
+        self.gai = individual_idx
+        
+        try:
+            # Use cached robot and environment state to evaluate this individual
+            robot = self.cached_robot_state['robot']
+            prev_pos = self.cached_robot_state['prev_pos']
+            curr_pos = self.cached_robot_state['curr_pos']
+            prev_rot = self.cached_robot_state['prev_rot']
+            curr_rot = self.cached_robot_state['curr_rot']
+            ground_id = self.cached_environment_state['ground_id']
+            
+            # Evaluate fitness using the parent class method
+            fitness_values = self.evaluate_fitness(robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id)
+            
+            return fitness_values
+            
+        except Exception as e:
+            self.logger.error(f"Error evaluating individual {individual_idx}: {e}")
+            # Return current fitness as fallback
+            return self.fitness[individual_idx].copy()
+            
+        finally:
+            # Restore original individual index
+            self.gai = original_gai
+    
+    def cache_evaluation_state(self, robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id):
+        """
+        Cache the current evaluation state for individual fitness evaluations.
+        Call this method during normal fitness evaluation to enable mutation tracking.
+        
+        Args:
+            robot: Robot instance
+            prev_pos: Previous position
+            curr_pos: Current position
+            prev_rot: Previous rotation matrix
+            curr_rot: Current rotation matrix
+            ground_id: Ground body ID
+        """
+        self.cached_robot_state = {
+            'robot': robot,
+            'prev_pos': prev_pos.copy() if hasattr(prev_pos, 'copy') else prev_pos,
+            'curr_pos': curr_pos.copy() if hasattr(curr_pos, 'copy') else curr_pos,
+            'prev_rot': prev_rot.copy() if hasattr(prev_rot, 'copy') else prev_rot,
+            'curr_rot': curr_rot.copy() if hasattr(curr_rot, 'copy') else curr_rot
+        }
+        
+        self.cached_environment_state = {
+            'ground_id': ground_id
+        }
+
     def configure_operators(self, active_operators=None, operator_probabilities=None):
         """
         Configure which operators are active and their probabilities.
@@ -99,6 +171,8 @@ class EnhancedVEGA(VEGA):
             List of applied operators
         """
         applied_operators = []
+        
+        # Get pre-mutation fitness if possible
         pre_mutation_fitness = self.fitness[individual_idx].copy()
         
         # Apply each operator based on configuration
@@ -119,12 +193,17 @@ class EnhancedVEGA(VEGA):
                     self.operator_statistics["failures"][operator_name] += 1
         
         # Track performance improvement attribution
-        if applied_operators:
-            post_mutation_fitness = self.evaluate_individual_fitness(individual_idx)
-            improvement = np.mean(post_mutation_fitness - pre_mutation_fitness)
-            
-            for op in applied_operators:
-                self.operator_statistics["improvements"][op].append(improvement)
+        if applied_operators and self.cached_robot_state is not None:
+            try:
+                # Evaluate post-mutation fitness
+                post_mutation_fitness = self.evaluate_individual_fitness(individual_idx)
+                improvement = np.mean(post_mutation_fitness - pre_mutation_fitness)
+                
+                for op in applied_operators:
+                    self.operator_statistics["improvements"][op].append(improvement)
+                        
+            except Exception as e:
+                self.logger.warning(f"Could not track improvement for operators {applied_operators}: {e}")
         
         self.last_applied_operators = applied_operators
         return applied_operators
@@ -294,8 +373,11 @@ class EnhancedVEGA(VEGA):
         Returns:
             Tuple of (fitness_values, performance_metrics)
         """
-        # Get base fitness evaluation
-        fitness_values = super().evaluate_fitness(robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id)
+        # Cache state for individual evaluations
+        self.cache_evaluation_state(robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id)
+        
+        # Get base fitness evaluation from parent class
+        fitness_values = self.evaluate_fitness(robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id)
         
         # Calculate additional performance metrics
         performance_metrics = self._calculate_performance_metrics(robot, fitness_values)
