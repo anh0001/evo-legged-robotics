@@ -63,8 +63,24 @@ class EnhancedVEGA(VEGA):
         # Add cache for robot state to enable individual fitness evaluation
         self.cached_robot_state = None
         self.cached_environment_state = None
-        
+
         self.logger = logging.getLogger('enhanced_vega')
+
+    def evolve(self):
+        """Override parent evolve to include structural mutations."""
+        # Run standard evolutionary step from the base class
+        super().evolve()
+
+        # The individual chosen by ``VEGA.evolve`` is stored in ``self.gai``
+        g1 = self.gai
+
+        # Apply additional structural mutations and keep track of statistics
+        applied_ops = self.apply_structural_mutations(g1)
+
+        if applied_ops:
+            self.logger.info(
+                f"Post-evolve structural mutations on individual {g1}: {applied_ops}"
+            )
     
     def evaluate_individual_fitness(self, individual_idx):
         """

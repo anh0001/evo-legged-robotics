@@ -352,6 +352,7 @@ class AblationStudyManager:
         # Enhanced monitoring variables
         operator_applications = {op: 0 for op in ["insertion", "deletion", "phase_exchange", "order_exchange"]}
         operator_successes = {op: 0 for op in ["insertion", "deletion", "phase_exchange", "order_exchange"]}
+        prev_success_counts = {op: 0 for op in operator_successes}
         
         while step_count < max_steps and vega.iteration < vega.iterations:
             vel_counter += 1
@@ -382,6 +383,10 @@ class AblationStudyManager:
                         if hasattr(vega, 'last_applied_operators'):
                             for op in vega.last_applied_operators:
                                 operator_applications[op] += 1
+                                succ_delta = vega.operator_statistics["successes"].get(op, 0) - prev_success_counts[op]
+                                if succ_delta > 0:
+                                    operator_successes[op] += succ_delta
+                                    prev_success_counts[op] += succ_delta
                         
                         # Store fitness history
                         experiment_data["fitness_history"].append({
@@ -414,14 +419,20 @@ class AblationStudyManager:
             step_count += 1
         
         # Compile final results
+        operator_summary = {}
+        if hasattr(vega, "get_operator_statistics_summary"):
+            operator_summary = vega.get_operator_statistics_summary()
+        else:
+            operator_summary = {
+                "applications": operator_applications,
+                "successes": operator_successes,
+            }
+
         experiment_data.update({
             "end_time": datetime.now().isoformat(),
             "total_steps": step_count,
             "final_iteration": vega.iteration,
-            "operator_statistics": {
-                "applications": operator_applications,
-                "successes": operator_successes
-            },
+            "operator_statistics": operator_summary,
             "final_performance": {
                 "best_fitness": vega.bfith[vega.iteration-1].tolist() if vega.iteration > 0 else [0]*6,
                 "final_hypervolume": experiment_data["fitness_history"][-1]["hypervolume"] if experiment_data["fitness_history"] else 0
