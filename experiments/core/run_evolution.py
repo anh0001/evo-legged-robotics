@@ -114,44 +114,66 @@ def check_convergence_criteria(vega, results, verbose=True):
     Returns:
         bool: True if convergence criteria are met
     """
-    if vega.iteration < 30:  # Don't check convergence too early
+    # CRITICAL FIX 1: Don't check convergence until after real evolution starts
+    min_generations_before_convergence = max(100, vega.gan * 2)  # At least 2 full population cycles
+    if vega.iteration < min_generations_before_convergence:
+        if verbose and vega.iteration % 25 == 0:
+            print(f"🔄 Iteration {vega.iteration}: Too early for convergence check (need {min_generations_before_convergence})")
         return False
     
-    current_best_stability = results['best_stability']
-    current_best_forward = np.max(vega.bfith[:min(vega.iteration+1, len(vega.bfith)), 0]) if vega.iteration < len(vega.bfith) else 0
+    # CRITICAL FIX 2: Much more realistic and achievable thresholds
+    stability_threshold = 80.0       # Reduced from 120.0 - more achievable
+    forward_threshold = 0.8          # Reduced from 1.5 - more achievable  
+    convergence_window = 50          # Larger window for stability assessment
+    stability_variance_threshold = 100.0  # Much lower threshold for meaningful convergence
     
-    # FIXED: More achievable thresholds
-    stability_threshold = 120.0      # Reduced from 180.0
-    forward_threshold = 1.5          # Reduced from 2.5
-    convergence_window = 20          # Reduced window
-    stability_variance_threshold = 500.0  # Much higher threshold
-    
+    # CRITICAL FIX 3: Only check convergence if we have enough evolution history
     if vega.iteration >= convergence_window:
         start_idx = max(0, vega.iteration - convergence_window)
         end_idx = min(vega.iteration + 1, len(vega.bfith))
         
-        if end_idx > start_idx:
+        if end_idx > start_idx and end_idx - start_idx >= convergence_window:
+            # Get current best values
+            current_best_stability = results['best_stability']
+            current_best_forward = np.max(vega.bfith[:min(vega.iteration+1, len(vega.bfith)), 0]) if vega.iteration < len(vega.bfith) else 0
+            
+            # Analyze recent stability trend
             recent_stability = vega.bfith[start_idx:end_idx, 1]
             stability_variance = np.var(recent_stability)
             
-            if verbose and vega.iteration % 10 == 0:
+            # Check for improvement stagnation (no improvement over window)
+            stability_improvement = recent_stability[-1] - recent_stability[0]
+            forward_improvement = vega.bfith[end_idx-1, 0] - vega.bfith[start_idx, 0]
+            
+            if verbose and vega.iteration % 25 == 0:
                 print(f"\n🔍 Convergence Check (Iteration {vega.iteration}):")
                 print(f"   Best Stability: {current_best_stability:.1f} (threshold: {stability_threshold})")
                 print(f"   Best Forward: {current_best_forward:.1f} (threshold: {forward_threshold})")
                 print(f"   Stability Variance: {stability_variance:.3f} (threshold: {stability_variance_threshold})")
+                print(f"   Stability Improvement: {stability_improvement:.3f}")
+                print(f"   Forward Improvement: {forward_improvement:.3f}")
             
+            # FIXED: More stringent convergence criteria
             stability_converged = current_best_stability > stability_threshold
             forward_converged = current_best_forward > forward_threshold
             variance_converged = stability_variance < stability_variance_threshold
             
-            criteria_met = sum([stability_converged, forward_converged, variance_converged])
+            # ADDITIONAL: Check for stagnation (no improvement)
+            stability_stagnant = abs(stability_improvement) < 5.0  # No improvement in stability
+            forward_stagnant = abs(forward_improvement) < 0.2      # No improvement in forward motion
             
-            if criteria_met >= 2:
+            # Require ALL primary criteria AND stagnation for convergence
+            criteria_met = stability_converged and forward_converged and variance_converged
+            stagnation_met = stability_stagnant and forward_stagnant
+            
+            if criteria_met and stagnation_met:
                 if verbose:
                     print(f"\n🎯 CONVERGENCE ACHIEVED at iteration {vega.iteration}!")
-                    print(f"   {'✅' if stability_converged else '❌'} Stability: {current_best_stability:.1f} > {stability_threshold}")
-                    print(f"   {'✅' if forward_converged else '❌'} Forward Motion: {current_best_forward:.1f} > {forward_threshold}")
-                    print(f"   {'✅' if variance_converged else '❌'} Stability Variance: {stability_variance:.3f} < {stability_variance_threshold}")
+                    print(f"   ✅ Stability: {current_best_stability:.1f} > {stability_threshold}")
+                    print(f"   ✅ Forward Motion: {current_best_forward:.1f} > {forward_threshold}")
+                    print(f"   ✅ Stability Variance: {stability_variance:.3f} < {stability_variance_threshold}")
+                    print(f"   ✅ Stability Stagnant: {stability_improvement:.3f}")
+                    print(f"   ✅ Forward Stagnant: {forward_improvement:.3f}")
                 
                 return True
     
@@ -296,6 +318,13 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                                           f"E={fitness_values[2]:6.1f} Sm={fitness_values[3]:6.1f}")
                                     print(f"   Best Stab: {results['best_stability']:6.1f} | "
                                           f"Failures: {stability_failures}")
+                                    
+                                    # Show if we're in initial sampling or evolution phase
+                                    if vega.iteration < vega.gan:
+                                        print(f"   Phase: Initial sampling ({vega.iteration + 1}/{vega.gan})")
+                                    else:
+                                        print(f"   Phase: Evolution (generation {vega.iteration - vega.gan + 1})")
+                                    
                                 except Exception as e:
                                     print(f"   Progress reporting error: {e}")
                             
@@ -339,13 +368,14 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                                     if verbose:
                                         print(f"⚠️  Data saving error: {e}")
                             
-                            # Check for early convergence
-                            if check_convergence_criteria(vega, results, verbose):
-                                results['convergence_achieved'] = True
-                                results['convergence_iteration'] = vega.iteration
-                                if verbose:
-                                    print(f"\n🎯 Early convergence detected! Stopping evolution.")
-                                break
+                            # FIXED: Only check for convergence after sufficient evolution
+                            if vega.iteration > max(100, vega.gan * 2):  # After initial sampling + some evolution
+                                if check_convergence_criteria(vega, results, verbose):
+                                    results['convergence_achieved'] = True
+                                    results['convergence_iteration'] = vega.iteration
+                                    if verbose:
+                                        print(f"\n🎯 Early convergence detected! Stopping evolution.")
+                                    break
                         
                         except Exception as e:
                             if verbose:
@@ -590,12 +620,15 @@ Examples:
             print(f"\n🤖 Robot initialized with enhanced motor control")
             print(f"🧠 VEGA initialized with 6-objective fitness function")
             print(f"🌍 Environment ready with enhanced physics")
+            print(f"Target iterations: {args.max_iterations}")
+            print(f"Convergence checking starts after iteration: {max(100, vega.gan * 2)}")
             if args.real_time:
                 print(f"🕐 Using PyBullet real-time simulation")
             elif simulation_speed == 0:
                 print(f"🚀 Running at maximum speed (no timing control)")
             else:
                 print(f"🕐 Running at {simulation_speed:.1f}x real-time speed")
+            print("-" * 60)
         
         # Run evolution with timing control
         results = run_evolution_loop(env, robot, vega, args.max_iterations, verbose, simulation_speed)
