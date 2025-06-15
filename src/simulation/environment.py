@@ -25,13 +25,13 @@ class Environment:
         # Enhanced physics parameters to prevent vibrations
         p.setPhysicsEngineParameter(
             fixedTimeStep=time_step,
-            numSolverIterations=100,      # Increased from 50 for better constraint solving
+            numSolverIterations=150,      # Increased from 100 for better stability
             numSubSteps=1,
-            erp=0.2,                      # Lower ERP for softer contacts
-            contactERP=0.2,               # Reduced contact ERP
-            frictionERP=0.2,
-            globalCFM=1e-6,               # Smaller CFM for stiffer constraints
-            contactBreakingThreshold=0.01, # Reduced threshold for cleaner contact breaking
+            erp=0.15,                     # Slightly reduced for softer contacts
+            contactERP=0.15,              # Reduced contact ERP
+            frictionERP=0.15,
+            globalCFM=5e-7,               # Smaller CFM for stiffer constraints
+            contactBreakingThreshold=0.005, # Reduced threshold
             enableConeFriction=1,
             deterministicOverlappingPairs=1,
             enableFileCaching=0

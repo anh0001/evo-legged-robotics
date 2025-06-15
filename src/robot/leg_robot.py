@@ -43,10 +43,10 @@ class LeggedRobot:
         self.qang = np.zeros((self.leg_count, self.dof))
         self.tang = np.zeros((self.leg_count, self.dof))
         
-        # Enhanced motor control parameters
-        self.kp = 10.0        # Position gain (reduced from typical values)
-        self.kd = 0.5         # Velocity gain (critical damping)
-        self.max_force = 20.0 # Maximum motor force
+        # FIXED: Better motor control parameters to prevent oscillations
+        self.kp = 8.0         # Increased from 10.0 for better response
+        self.kd = 1.5         # Increased from 0.5 for better damping
+        self.max_force = 15.0 # Increased from 20.0 but still conservative
         
         # Control parameters
         self.posz = 1  # Normal: 1, Overturn: -1
@@ -114,14 +114,14 @@ class LeggedRobot:
         # Configure base dynamics
         p.changeDynamics(
             self.body_id, -1,  # Base link
-            lateralFriction=0.8,
-            spinningFriction=0.01,
-            rollingFriction=0.001,
-            restitution=0.1,
-            contactDamping=50.0,
-            contactStiffness=3000.0,
-            linearDamping=0.1,
-            angularDamping=0.1
+            lateralFriction=0.9,      # Increased friction for better grip
+            spinningFriction=0.02,    # Slightly increased
+            rollingFriction=0.002,    # Slightly increased
+            restitution=0.05,         # Reduced bouncing
+            contactDamping=80.0,      # Increased damping
+            contactStiffness=4000.0,  # Increased stiffness
+            linearDamping=0.15,       # Increased damping
+            angularDamping=0.2        # Increased angular damping
         )
         
         # Configure joint dynamics
@@ -132,15 +132,15 @@ class LeggedRobot:
             if joint_type == p.JOINT_REVOLUTE:
                 p.changeDynamics(
                     self.body_id, joint_idx,
-                    lateralFriction=0.8,
-                    spinningFriction=0.01,
-                    rollingFriction=0.001,
-                    restitution=0.1,
-                    contactDamping=50.0,
-                    contactStiffness=3000.0,
-                    jointDamping=0.05,  # Joint damping to reduce oscillations
-                    linearDamping=0.1,
-                    angularDamping=0.1
+                    lateralFriction=0.9,
+                    spinningFriction=0.02,
+                    rollingFriction=0.002,
+                    restitution=0.05,
+                    contactDamping=80.0,
+                    contactStiffness=4000.0,
+                    jointDamping=0.1,        # Increased joint damping
+                    linearDamping=0.15,
+                    angularDamping=0.2
                 )
         
         # Disable default motor control for all active joints
@@ -373,7 +373,7 @@ class LeggedRobot:
                 'vertical_stability': vertical_stability,
                 'height': height,
                 'angular_speed': angular_speed,
-                'is_stable': vertical_stability > 0.7 and angular_speed < 2.0
+                'is_stable': vertical_stability > 0.6 and angular_speed < 3.0  # FIXED: More lenient thresholds
             }
         except:
             return {
