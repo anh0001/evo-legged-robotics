@@ -58,11 +58,21 @@ except ImportError as e:
 
 
 def setup_enhanced_physics():
-    """Setup enhanced physics parameters for stability."""
+    """Setup enhanced physics parameters based on Bullet3 best practices."""
     return {
-        'time_step': 0.002,  # 1/500s for better stability
+        'time_step': 1.0/240.0,  # Standard Bullet3 timestep (240 Hz)
         'gravity': -9.81,
-        'terrain_type': 'flat'  # Start with flat terrain for stability
+        'terrain_type': 'flat',
+        # Additional Bullet3 parameters for stability
+        'num_solver_iterations': 50,  # More iterations for better constraint solving
+        'enable_cone_friction': True,
+        'split_impulse_enabled': True,
+        'split_impulse_penetration_threshold': -0.02,
+        'contact_breaking_threshold': 0.02,
+        'restitution_velocity_threshold': 0.2,
+        'erp': 0.8,  # Error Reduction Parameter
+        'contact_erp': 0.8,
+        'friction_erp': 0.8
     }
 
 

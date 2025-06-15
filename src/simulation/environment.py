@@ -11,7 +11,23 @@ class Environment:
     to prevent leg vibrations and improve stability.
     """
     
-    def __init__(self, render=True, time_step=0.002, gravity=-9.81, terrain_type="flat", real_time=False):
+    def __init__(
+        self,
+        render=True,
+        time_step=0.002,
+        gravity=-9.81,
+        terrain_type="flat",
+        real_time=False,
+        num_solver_iterations=50,
+        enable_cone_friction=True,
+        split_impulse_enabled=False,
+        split_impulse_penetration_threshold=-0.02,
+        contact_breaking_threshold=0.02,
+        restitution_velocity_threshold=0.2,
+        erp=0.8,
+        contact_erp=0.8,
+        friction_erp=0.8
+    ):
         """Initialize environment with enhanced physics parameters."""
         self.client = p.connect(p.GUI if render else p.DIRECT)
         p.setRealTimeSimulation(1 if real_time else 0)
@@ -25,14 +41,17 @@ class Environment:
         # Enhanced physics parameters to prevent vibrations
         p.setPhysicsEngineParameter(
             fixedTimeStep=time_step,
-            numSolverIterations=200,      # Increase from 150 for better stability
+            numSolverIterations=num_solver_iterations,
             numSubSteps=1,
-            erp=0.15,                     # Slightly reduced for softer contacts
-            contactERP=0.15,              # Reduced contact ERP
-            frictionERP=0.15,
-            globalCFM=5e-7,               # Smaller CFM for stiffer constraints
-            contactBreakingThreshold=0.005, # Reduced threshold
-            enableConeFriction=1,
+            erp=erp,
+            contactERP=contact_erp,
+            frictionERP=friction_erp,
+            globalCFM=5e-7,
+            contactBreakingThreshold=contact_breaking_threshold,
+            enableConeFriction=1 if enable_cone_friction else 0,
+            useSplitImpulse=1 if split_impulse_enabled else 0,
+            splitImpulsePenetrationThreshold=split_impulse_penetration_threshold,
+            restitutionVelocityThreshold=restitution_velocity_threshold,
             deterministicOverlappingPairs=1,
             enableFileCaching=0
         )
