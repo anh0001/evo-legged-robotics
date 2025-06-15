@@ -218,77 +218,90 @@ class VEGA:
         alignment = 0
         if distance > 0:
             alignment = np.dot(rr, v) / distance
+
+        # FIXED: Improved Fitness Components with proper scaling
         
-        # Enhanced Fitness Components
+        # 1. Forward Motion (normalized to [0, 1])
+        forward_base = math.exp(-angle_change**2) + distance * 10 + alignment
+        forward_fitness = np.clip(forward_base / 20.0, 0, 1)  # Normalize to [0,1]
         
-        # 1. Forward Motion (basic locomotion)
-        forward_fitness = math.exp(-angle_change**2) + distance * 10 + alignment
-        
-        # 2. Stability (CRITICAL for preventing vibrations)
-        stability_fitness = self._calculate_stability_fitness(
+        # 2. Stability (normalized to [0, 1])
+        stability_fitness = self._calculate_normalized_stability_fitness(
             stability_metrics, curr_rot, robot_state
         )
         
-        # 3. Energy Efficiency (prevents excessive joint movements)
-        energy_fitness = self._calculate_energy_fitness(robot_state, distance)
+        # 3. Energy Efficiency (normalized to [0, 1]) 
+        energy_fitness = self._calculate_normalized_energy_fitness(robot_state, distance)
         
-        # 4. Smoothness (prevents jerky movements and vibrations)
-        smoothness_fitness = self._calculate_smoothness_fitness(
+        # 4. Smoothness (FIXED: better scaling)
+        smoothness_fitness = self._calculate_normalized_smoothness_fitness(
             robot, robot_state, displacement
         )
         
-        # 5. Direction Control based on yaw change
-        direction_fitness = math.exp(-direction_error**2) * 100
+        # 5. Direction Control (normalized to [0, 1])
+        direction_fitness = math.exp(-direction_error**2)  # Already in [0,1]
         
-        # 6. Foot Contact Quality (stable ground contact)
-        contact_fitness = self._calculate_contact_fitness(robot, ground_id)
+        # 6. Foot Contact Quality (normalized to [0, 1])
+        contact_fitness = self._calculate_normalized_contact_fitness(robot, ground_id)
         
-        # Apply weights and combine fitness components
+        # FIXED: Weighted combination in normalized space [0, 1]
+        normalized_fitness = [
+            forward_fitness,
+            stability_fitness, 
+            energy_fitness,
+            smoothness_fitness,
+            direction_fitness,
+            contact_fitness
+        ]
+        
+        # Apply weights AFTER normalization
         weighted_fitness = [
-            max(0, min(100, forward_fitness * self.fitness_weights['forward_motion'])),
-            max(0, min(200, stability_fitness * self.fitness_weights['stability'])),
-            max(0, min(50, energy_fitness * self.fitness_weights['energy_efficiency'])),
-            max(0, min(100, smoothness_fitness * self.fitness_weights['smoothness'])),
-            max(0, min(150, direction_fitness * self.fitness_weights['direction_control'])),
-            max(0, min(100, contact_fitness * self.fitness_weights['foot_contact']))
+            normalized_fitness[0] * self.fitness_weights['forward_motion'],
+            normalized_fitness[1] * self.fitness_weights['stability'],
+            normalized_fitness[2] * self.fitness_weights['energy_efficiency'], 
+            normalized_fitness[3] * self.fitness_weights['smoothness'],
+            normalized_fitness[4] * self.fitness_weights['direction_control'],
+            normalized_fitness[5] * self.fitness_weights['foot_contact']
         ]
 
-        final_fitness = list(weighted_fitness)
-
-        # FIXED: More gradual penalties
+        # FIXED: Additive penalties instead of multiplicative
+        stability_penalty = 0
         if stability_metrics['vertical_stability'] < 0.3:
-            penalty_factor = 0.1
+            stability_penalty = 2.0  # Subtract penalty
         elif stability_metrics['vertical_stability'] < 0.5:
-            penalty_factor = 0.3
-        else:
-            penalty_factor = 1.0
+            stability_penalty = 1.0
         
+        angular_penalty = 0
         if stability_metrics['angular_speed'] > 6.0:
-            penalty_factor *= 0.2
+            angular_penalty = 3.0
         elif stability_metrics['angular_speed'] > 4.0:
-            penalty_factor *= 0.5
+            angular_penalty = 1.5
         
-        final_fitness = [f * penalty_factor for f in final_fitness]
+        # Apply penalties by subtraction (keeps gradients)
+        final_fitness = [
+            max(0, weighted_fitness[0] - stability_penalty * 0.3),  # Forward
+            max(0, weighted_fitness[1] - stability_penalty),        # Stability  
+            max(0, weighted_fitness[2] - angular_penalty * 0.2),    # Energy
+            max(0, weighted_fitness[3] - angular_penalty * 0.2),    # Smoothness
+            max(0, weighted_fitness[4] - stability_penalty * 0.2),  # Direction
+            max(0, weighted_fitness[5] - stability_penalty * 0.1)   # Contact
+        ]
         
         self.fitness[self.gai] = final_fitness
 
         # Track stability for monitoring
         self.stability_history.append(stability_metrics['vertical_stability'])
 
-        # Update fitness history after penalties
+        # Update fitness history
         for i in range(6):
             self.cfith[self.iteration, i] = self.fitness[self.gai, i]
         self.chostl[self.iteration] = self.host_lengths[self.gai]
 
-        # Log comprehensive (penalized) fitness metrics
+        # Log fitness metrics
         self.logger.info(
             f"Fitness - Forward: {self.fitness[self.gai, 0]:.3f}, Stability: {self.fitness[self.gai, 1]:.3f}, "
             f"Energy: {self.fitness[self.gai, 2]:.3f}, Smoothness: {self.fitness[self.gai, 3]:.3f}, "
             f"Direction: {self.fitness[self.gai, 4]:.3f}, Contact: {self.fitness[self.gai, 5]:.3f}"
-        )
-        self.logger.info(
-            f"Robot metrics - Distance: {distance:.3f}, Vertical stability: {stability_metrics['vertical_stability']:.3f}, "
-            f"Angular speed: {stability_metrics['angular_speed']:.3f}"
         )
         
         # Find best fitness for each objective
@@ -315,45 +328,44 @@ class VEGA:
         
         return self.fitness[self.gai]
     
-    def _calculate_stability_fitness(self, stability_metrics, curr_rot, robot_state):
-        """FIXED: Better scaled stability fitness."""
+    def _calculate_normalized_stability_fitness(self, stability_metrics, curr_rot, robot_state):
+        """FIXED: Normalized stability fitness in [0, 1]."""
         vertical_component = max(0, stability_metrics['vertical_stability'])
         height_component = max(0, 1.0 / (1.0 + abs(robot_state['position'][2] - 0.35)))
         
-        # FIXED: More lenient angular penalty
-        angular_penalty = max(0, 1.0 / (1.0 + stability_metrics['angular_speed'] / 2.0))
+        # More lenient angular penalty
+        angular_penalty = max(0, 1.0 / (1.0 + stability_metrics['angular_speed'] / 3.0))
         
         rot_matrix = np.array(curr_rot).reshape(3, 3)
         try:
             roll = math.asin(max(-0.99, min(0.99, -rot_matrix[2, 1])))
             pitch = math.asin(max(-0.99, min(0.99, rot_matrix[2, 0])))
-            roll_pitch_stability = math.exp(-(roll**2 + pitch**2))
+            roll_pitch_stability = math.exp(-(roll**2 + pitch**2) / 2.0)  # More lenient
         except:
             roll_pitch_stability = 0.5
         
-        # FIXED: Better weighted combination
+        # Weighted combination normalized to [0, 1]
         stability_fitness = (
-            vertical_component * 3.0 +
-            height_component * 1.0 +
-            angular_penalty * 2.0 +
-            roll_pitch_stability * 1.0
-        ) / 7.0
+            vertical_component * 0.5 +
+            height_component * 0.2 +
+            angular_penalty * 0.2 +
+            roll_pitch_stability * 0.1
+        )
         
-        return max(0, min(200, stability_fitness * 150))  # Clamped and scaled
+        return np.clip(stability_fitness, 0, 1)
     
-    def _calculate_energy_fitness(self, robot_state, distance):
-        """Calculate energy efficiency to prevent excessive movements."""
-        # Simple energy model based on joint velocity variance
+    def _calculate_normalized_energy_fitness(self, robot_state, distance):
+        """FIXED: Normalized energy fitness in [0, 1]."""
         joint_angles = robot_state['joint_angles']
         
         if self.prev_robot_state is not None:
             prev_angles = self.prev_robot_state['joint_angles']
             joint_velocities = np.abs(joint_angles - prev_angles)
             
-            # Penalize high joint velocities
-            energy_cost = np.sum(joint_velocities**2)
+            # Energy cost
+            energy_cost = np.mean(joint_velocities**2)  # Use mean instead of sum
             
-            # Reward distance per energy cost
+            # Efficiency = distance per unit energy cost
             if energy_cost > 0:
                 efficiency = distance / (energy_cost + 0.01)
             else:
@@ -361,10 +373,11 @@ class VEGA:
         else:
             efficiency = distance
         
-        return max(0, efficiency * 50)  # Scale appropriately
+        # Normalize to [0, 1] - assume max efficiency around 5.0
+        return np.clip(efficiency / 5.0, 0, 1)
     
-    def _calculate_smoothness_fitness(self, robot, robot_state, displacement):
-        """Calculate smoothness to prevent jerky movements and vibrations."""
+    def _calculate_normalized_smoothness_fitness(self, robot, robot_state, displacement):
+        """FIXED: Normalized smoothness fitness in [0, 1] with better scaling."""
         smoothness_score = 0
         
         # Track motion history for smoothness calculation
@@ -375,41 +388,39 @@ class VEGA:
         })
         
         # Keep only recent history
-        if len(self.motion_history) > 10:
+        if len(self.motion_history) > 5:  # Shorter history for responsiveness
             self.motion_history.pop(0)
         
         if len(self.motion_history) >= 3:
-            # Calculate acceleration (change in velocity)
+            # Calculate velocity smoothness
             recent_displacements = [m['displacement'] for m in self.motion_history[-3:]]
             
-            # Velocity smoothness
             vel_changes = []
             for i in range(1, len(recent_displacements)):
                 vel_change = np.linalg.norm(recent_displacements[i] - recent_displacements[i-1])
                 vel_changes.append(vel_change)
             
-            # Penalize large velocity changes (jerky motion)
+            # FIXED: More lenient exponential decay
             if vel_changes:
                 avg_vel_change = np.mean(vel_changes)
-                smoothness_score = math.exp(-avg_vel_change * 10)
+                smoothness_score = math.exp(-avg_vel_change * 2)  # Reduced from 10
             
             # Joint angle smoothness
             recent_angles = [m['joint_angles'] for m in self.motion_history[-3:]]
             angle_changes = []
             for i in range(1, len(recent_angles)):
-                angle_change = np.linalg.norm(recent_angles[i] - recent_angles[i-1])
+                angle_change = np.mean(np.abs(recent_angles[i] - recent_angles[i-1]))  # Mean instead of norm
                 angle_changes.append(angle_change)
             
             if angle_changes:
                 avg_angle_change = np.mean(angle_changes)
-                joint_smoothness = math.exp(-avg_angle_change * 2)
+                joint_smoothness = math.exp(-avg_angle_change * 1)  # Reduced from 2
                 smoothness_score = (smoothness_score + joint_smoothness) / 2
         
-        return max(0, smoothness_score * 100)
+        return np.clip(smoothness_score, 0, 1)
     
-    def _calculate_contact_fitness(self, robot, ground_id):
-        """Calculate foot contact quality using PyBullet contact points."""
-
+    def _calculate_normalized_contact_fitness(self, robot, ground_id):
+        """FIXED: Normalized contact fitness in [0, 1]."""
         contacts = 0
         for i in range(robot.leg_count):
             foot_link = robot.leg_joints[i][2]
@@ -417,7 +428,8 @@ class VEGA:
             if len(pts) > 0:
                 contacts += 1
 
-        return (contacts / robot.leg_count) * 100
+        # Already normalized to [0, 1]
+        return contacts / robot.leg_count
     
     def rank(self):
         """Enhanced ranking for multi-objective optimization."""
@@ -817,23 +829,36 @@ class VEGA:
                 'final_best': float(self.bfith[self.iteration, i]) if self.iteration < len(self.bfith) else 0.0
             }
         
-        # Overall summary
+        # FIXED: Ensure all values are JSON serializable
         summary = {
-            'experiment_id': self.experiment_id,
-            'completion_time': time.time(),
-            'total_iterations': self.iteration,
-            'population_size': self.gan,
+            'experiment_id': str(self.experiment_id),
+            'completion_time': float(time.time()),
+            'total_iterations': int(self.iteration),
+            'population_size': int(self.gan),
             'chromosome_length_range': [int(np.min(self.host_lengths)), int(np.max(self.host_lengths))],
-            'fitness_weights': self.fitness_weights,
+            'fitness_weights': dict(self.fitness_weights),  # Ensure it's a regular dict
             'final_statistics': final_stats,
-            'convergence_achieved': len(self.stability_history) > 100 and np.mean(self.stability_history[-50:]) > 0.8,
-            'stability_failures': sum(1 for s in self.stability_history if s < 0.5) if self.stability_history else 0,
+            'convergence_achieved': bool(len(self.stability_history) > 100 and np.mean(self.stability_history[-50:]) > 0.8),
+            'stability_failures': int(sum(1 for s in self.stability_history if s < 0.5) if self.stability_history else 0),
             'avg_stability': float(np.mean(self.stability_history)) if self.stability_history else 0.0
         }
         
-        # Save summary
+        # FIXED: Custom JSON encoder to handle any remaining numpy types
+        class NumpyEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, (np.integer, np.int64, np.int32)):
+                    return int(obj)
+                elif isinstance(obj, (np.floating, np.float64, np.float32)):
+                    return float(obj)
+                elif isinstance(obj, (np.bool_, bool)):
+                    return bool(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return super().default(obj)
+        
+        # Save summary with custom encoder
         with open(filename, 'w') as f:
-            json.dump(summary, f, indent=2)
+            json.dump(summary, f, indent=2, cls=NumpyEncoder)
         
         self.logger.info(f"Evolution summary saved to {filename}")
         return filename
