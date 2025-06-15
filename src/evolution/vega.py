@@ -245,32 +245,31 @@ class VEGA:
         
         # Apply weights and combine fitness components
         weighted_fitness = [
-            forward_fitness * self.fitness_weights['forward_motion'],
-            stability_fitness * self.fitness_weights['stability'],
-            energy_fitness * self.fitness_weights['energy_efficiency'],
-            smoothness_fitness * self.fitness_weights['smoothness'],
-            direction_fitness * self.fitness_weights['direction_control'],
-            contact_fitness * self.fitness_weights['foot_contact']
+            max(0, min(100, forward_fitness * self.fitness_weights['forward_motion'])),
+            max(0, min(200, stability_fitness * self.fitness_weights['stability'])),
+            max(0, min(50, energy_fitness * self.fitness_weights['energy_efficiency'])),
+            max(0, min(100, smoothness_fitness * self.fitness_weights['smoothness'])),
+            max(0, min(150, direction_fitness * self.fitness_weights['direction_control'])),
+            max(0, min(100, contact_fitness * self.fitness_weights['foot_contact']))
         ]
 
-        # Compute penalties before assigning fitness
         final_fitness = list(weighted_fitness)
 
-        # Apply penalties for poor stability (critical for preventing vibrations)
-        if stability_metrics['vertical_stability'] < 0.5:
-            self.logger.info(
-                f"Stability penalty applied - vertical: {stability_metrics['vertical_stability']:.3f}"
-            )
-            final_fitness = [f * 0.1 for f in final_fitness]
-
-        # Apply penalties for excessive vibrations
-        if stability_metrics['angular_speed'] > 5.0:
-            self.logger.info(
-                f"Vibration penalty applied - angular speed: {stability_metrics['angular_speed']:.3f}"
-            )
-            final_fitness = [f * 0.5 for f in final_fitness]
-
-        # Update fitness for current individual with penalties applied
+        # FIXED: More gradual penalties
+        if stability_metrics['vertical_stability'] < 0.3:
+            penalty_factor = 0.1
+        elif stability_metrics['vertical_stability'] < 0.5:
+            penalty_factor = 0.3
+        else:
+            penalty_factor = 1.0
+        
+        if stability_metrics['angular_speed'] > 6.0:
+            penalty_factor *= 0.2
+        elif stability_metrics['angular_speed'] > 4.0:
+            penalty_factor *= 0.5
+        
+        final_fitness = [f * penalty_factor for f in final_fitness]
+        
         self.fitness[self.gai] = final_fitness
 
         # Track stability for monitoring
@@ -317,32 +316,30 @@ class VEGA:
         return self.fitness[self.gai]
     
     def _calculate_stability_fitness(self, stability_metrics, curr_rot, robot_state):
-        """Calculate stability-based fitness to prevent vibrations."""
-        # Vertical orientation component (most important)
-        vertical_component = stability_metrics['vertical_stability']
+        """FIXED: Better scaled stability fitness."""
+        vertical_component = max(0, stability_metrics['vertical_stability'])
+        height_component = max(0, 1.0 / (1.0 + abs(robot_state['position'][2] - 0.35)))
         
-        # Height stability (penalize bouncing)
-        height_component = 1.0 / (1.0 + abs(robot_state['position'][2] - 0.5))
+        # FIXED: More lenient angular penalty
+        angular_penalty = max(0, 1.0 / (1.0 + stability_metrics['angular_speed'] / 2.0))
         
-        # Angular velocity penalty (prevent spinning/vibrating)
-        angular_penalty = math.exp(-stability_metrics['angular_speed'])
-        
-        # Body roll/pitch stability
         rot_matrix = np.array(curr_rot).reshape(3, 3)
-        roll_pitch_stability = math.exp(-(
-            math.asin(max(-1, min(1, -rot_matrix[2, 1])))**2 +  # Roll
-            math.asin(max(-1, min(1, rot_matrix[2, 0])))**2      # Pitch
-        ))
+        try:
+            roll = math.asin(max(-0.99, min(0.99, -rot_matrix[2, 1])))
+            pitch = math.asin(max(-0.99, min(0.99, rot_matrix[2, 0])))
+            roll_pitch_stability = math.exp(-(roll**2 + pitch**2))
+        except:
+            roll_pitch_stability = 0.5
         
-        # Combine stability components
+        # FIXED: Better weighted combination
         stability_fitness = (
-            vertical_component * 2.0 +
+            vertical_component * 3.0 +
             height_component * 1.0 +
-            angular_penalty * 1.5 +
+            angular_penalty * 2.0 +
             roll_pitch_stability * 1.0
-        ) / 5.5
+        ) / 7.0
         
-        return max(0, stability_fitness * 100)  # Scale to reasonable range
+        return max(0, min(200, stability_fitness * 150))  # Clamped and scaled
     
     def _calculate_energy_fitness(self, robot_state, distance):
         """Calculate energy efficiency to prevent excessive movements."""
@@ -482,39 +479,39 @@ class VEGA:
         
         # Apply evolution with enhanced mutation rates for stability
         g3 = int(self.gan * np.random.random())
-        r = np.random.random() * 0.4  # Slightly reduced crossover rate
+        # FIXED: Reduced crossover rate for stability
+        r = np.random.random() * 0.3  # Reduced from 0.4
         
         # Copy sequence length
         self.host_lengths[g1] = self.host_lengths[g2]
         
-        # Enhanced crossover and mutation
+        # FIXED: Enhanced mutation with stability focus
         for m in range(self.host_lengths[g1]):
             for i in range(2):
                 for j in range(self.dof):
                     if (np.random.random() < r) and (m < self.host_lengths[g3]):
-                        # Crossover with reduced mutation for stability
-                        mutation_factor = 0.1 if h == 1 else 0.2  # Less mutation for stability
+                        # FIXED: Much smaller mutations for stability
+                        mutation_factor = 0.05 if h == 1 else 0.1  # Halved mutation rates
                         self.hosts[g1, m, i, j] = (
                             self.hosts[g3, m, i, j] + 
                             self.randn() * self.q_range[j] * mutation_factor
                         )
                     else:
-                        # Best individual with small mutation
-                        mutation_factor = 0.05 if h == 1 else 0.1
+                        mutation_factor = 0.02 if h == 1 else 0.05  # Even smaller for best individual
                         self.hosts[g1, m, i, j] = (
                             self.hosts[g2, m, i, j] + 
                             self.randn() * self.q_range[j] * mutation_factor
                         )
                     
-                    # Enforce bounds
+                    # Enforce bounds with safety margin
                     self.hosts[g1, m, i, j] = np.clip(
                         self.hosts[g1, m, i, j],
-                        self.q_min[j],
-                        self.q_min[j] + self.q_range[j]
+                        self.q_min[j] + 0.1,  # Safety margin
+                        self.q_min[j] + self.q_range[j] - 0.1
                     )
         
-        # Apply specialized mutations with reduced probability for stability
-        mutation_prob = 0.1 if h == 1 else 0.15
+        # FIXED: Reduced structural mutation probabilities  
+        mutation_prob = 0.05 if h == 1 else 0.08  # Halved from 0.1/0.15
         
         # Insertion mutation
         if (self.host_lengths[g1] < self.gal - 1 and np.random.random() < mutation_prob):
@@ -614,14 +611,16 @@ class VEGA:
                 if j == 0:  # First DOF
                     phase = 0 if i % 2 == 0 else 1
                     angle_deg = self.hosts[self.gai, gaj, phase, j]
-                    # Clamp to reasonable range to prevent extreme movements
-                    angle_deg = np.clip(angle_deg, -30, 30)  # More conservative range
+                    # FIXED: Even more conservative range
+                    angle_deg = np.clip(angle_deg, -20, 20)  # Reduced from -30,30
                     angles[i, j] = np.radians(angle_deg)
                 else:  # DOF 1 and 2
                     phase = 0 if i % 2 == 0 else 1
                     angle_deg = self.hosts[self.gai, gaj, phase, j]
-                    # Ensure reasonable joint limits
-                    angle_deg = np.clip(angle_deg, self.q_min[j], self.q_min[j] + self.q_range[j])
+                    # FIXED: Conservative joint limits with safety margins
+                    min_angle = self.q_min[j] + 2.0  # Safety margin
+                    max_angle = self.q_min[j] + self.q_range[j] - 2.0
+                    angle_deg = np.clip(angle_deg, min_angle, max_angle)
                     
                     if i < 3:  # Right side
                         angles[i, j] = -np.radians(angle_deg)

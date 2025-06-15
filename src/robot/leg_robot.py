@@ -44,9 +44,9 @@ class LeggedRobot:
         self.tang = np.zeros((self.leg_count, self.dof))
         
         # FIXED: Better motor control parameters to prevent oscillations
-        self.kp = 8.0         # Increased from 10.0 for better response
-        self.kd = 1.5         # Increased from 0.5 for better damping
-        self.max_force = 15.0 # Increased from 20.0 but still conservative
+        self.kp = 5.0         # Reduced from 8.0 for less aggressive response
+        self.kd = 2.5         # Increased from 1.5 for better damping  
+        self.max_force = 12.0 # Reduced from 15.0 for smoother control
         
         # Control parameters
         self.posz = 1  # Normal: 1, Overturn: -1
@@ -114,14 +114,14 @@ class LeggedRobot:
         # Configure base dynamics
         p.changeDynamics(
             self.body_id, -1,  # Base link
-            lateralFriction=0.9,      # Increased friction for better grip
-            spinningFriction=0.02,    # Slightly increased
-            rollingFriction=0.002,    # Slightly increased
-            restitution=0.05,         # Reduced bouncing
-            contactDamping=80.0,      # Increased damping
-            contactStiffness=4000.0,  # Increased stiffness
-            linearDamping=0.15,       # Increased damping
-            angularDamping=0.2        # Increased angular damping
+            lateralFriction=0.8,        # Reduced for more realistic movement
+            spinningFriction=0.03,      # Increased to reduce spinning
+            rollingFriction=0.005,      # Increased slightly
+            restitution=0.02,           # Further reduced bouncing
+            contactDamping=120.0,       # Increased damping
+            contactStiffness=5000.0,    # Increased stiffness
+            linearDamping=0.25,         # Increased for stability
+            angularDamping=0.35         # Significantly increased to prevent spinning
         )
         
         # Configure joint dynamics
@@ -132,15 +132,15 @@ class LeggedRobot:
             if joint_type == p.JOINT_REVOLUTE:
                 p.changeDynamics(
                     self.body_id, joint_idx,
-                    lateralFriction=0.9,
-                    spinningFriction=0.02,
-                    rollingFriction=0.002,
-                    restitution=0.05,
-                    contactDamping=80.0,
-                    contactStiffness=4000.0,
-                    jointDamping=0.1,        # Increased joint damping
-                    linearDamping=0.15,
-                    angularDamping=0.2
+                    lateralFriction=0.8,
+                    spinningFriction=0.03,
+                    rollingFriction=0.005,
+                    restitution=0.02,
+                    contactDamping=120.0,
+                    contactStiffness=5000.0,
+                    jointDamping=0.15,        # Increased joint damping
+                    linearDamping=0.25,
+                    angularDamping=0.35
                 )
         
         # Disable default motor control for all active joints
@@ -350,7 +350,7 @@ class LeggedRobot:
     
     def check_stability(self):
         """
-        Check robot stability and return stability metrics.
+        Enhanced stability checking with more lenient thresholds.
         
         Returns:
             Dictionary with stability information
@@ -373,7 +373,7 @@ class LeggedRobot:
                 'vertical_stability': vertical_stability,
                 'height': height,
                 'angular_speed': angular_speed,
-                'is_stable': vertical_stability > 0.6 and angular_speed < 3.0  # FIXED: More lenient thresholds
+                'is_stable': vertical_stability > 0.4 and angular_speed < 4.0  # More lenient thresholds
             }
         except:
             return {

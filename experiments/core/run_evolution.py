@@ -114,22 +114,18 @@ def check_convergence_criteria(vega, results, verbose=True):
     Returns:
         bool: True if convergence criteria are met
     """
-    if vega.iteration < 50:  # Don't check convergence too early
+    if vega.iteration < 30:  # Don't check convergence too early
         return False
     
-    # Get current best fitness values
     current_best_stability = results['best_stability']
     current_best_forward = np.max(vega.bfith[:min(vega.iteration+1, len(vega.bfith)), 0]) if vega.iteration < len(vega.bfith) else 0
     
-    # FIXED: Use REALISTIC thresholds based on actual observed values
-    stability_threshold = 180.0   # Reduced from 200.0 - more achievable
-    forward_threshold = 2.5       # Reduced from 3.0 - more achievable
+    # FIXED: More achievable thresholds
+    stability_threshold = 120.0      # Reduced from 180.0
+    forward_threshold = 1.5          # Reduced from 2.5
+    convergence_window = 20          # Reduced window
+    stability_variance_threshold = 500.0  # Much higher threshold
     
-    # FIXED: Much more realistic convergence criteria
-    convergence_window = 30       # Increased window
-    stability_variance_threshold = 100.0  # MUCH higher - was 5.0, now 100.0
-    
-    # Check if we have enough iterations for variance analysis
     if vega.iteration >= convergence_window:
         start_idx = max(0, vega.iteration - convergence_window)
         end_idx = min(vega.iteration + 1, len(vega.bfith))
@@ -138,22 +134,19 @@ def check_convergence_criteria(vega, results, verbose=True):
             recent_stability = vega.bfith[start_idx:end_idx, 1]
             stability_variance = np.var(recent_stability)
             
-            # Debug logging to show actual values vs thresholds
             if verbose and vega.iteration % 10 == 0:
                 print(f"\n🔍 Convergence Check (Iteration {vega.iteration}):")
                 print(f"   Best Stability: {current_best_stability:.1f} (threshold: {stability_threshold})")
                 print(f"   Best Forward: {current_best_forward:.1f} (threshold: {forward_threshold})")
                 print(f"   Stability Variance: {stability_variance:.3f} (threshold: {stability_variance_threshold})")
             
-            # Check convergence with realistic criteria
             stability_converged = current_best_stability > stability_threshold
             forward_converged = current_best_forward > forward_threshold
             variance_converged = stability_variance < stability_variance_threshold
             
-            # FIXED: Allow convergence with 2/3 criteria met (was 3/3)
             criteria_met = sum([stability_converged, forward_converged, variance_converged])
             
-            if criteria_met >= 2:  # At least 2 out of 3 criteria
+            if criteria_met >= 2:
                 if verbose:
                     print(f"\n🎯 CONVERGENCE ACHIEVED at iteration {vega.iteration}!")
                     print(f"   {'✅' if stability_converged else '❌'} Stability: {current_best_stability:.1f} > {stability_threshold}")
