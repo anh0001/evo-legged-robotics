@@ -130,6 +130,10 @@ class VEGA:
         config_file = os.path.join(self.log_dir, 'config.json')
         with open(config_file, 'w') as f:
             json.dump(config, f, indent=2)
+
+    def clear_motion_history(self):
+        """Reset the stored motion history used for smoothness calculation."""
+        self.motion_history = []
     
     def initialize_populations(self):
         """Initialize populations with better diversity."""
@@ -533,6 +537,7 @@ class VEGA:
             self._apply_order_exchange_mutation(g1)
         
         self.gai = g1
+        self.clear_motion_history()
         self.logger.info(f"Individual {self.gai} selected for {obj_names[h]}")
     
     def _apply_insertion_mutation(self, individual):

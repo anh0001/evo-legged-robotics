@@ -291,6 +291,7 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                         # Choose next individual or evolve population
                         if vega.iteration < vega.gan:
                             vega.gai = vega.iteration % vega.gan
+                            vega.clear_motion_history()
                         else:
                             vega.evolve()  # gai updated inside evolve
 
@@ -388,6 +389,7 @@ def save_evolution_results(vega, results, args):
         best_forward_idx = np.argmax(vega.fitness[:, 0])
         
         vega.gai = best_stability_idx
+        vega.clear_motion_history()
         stability_controller_path = vega.save_best_controller()
         
         # Generate summary
