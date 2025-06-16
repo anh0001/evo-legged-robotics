@@ -8,134 +8,117 @@ import logging
 import json
 from datetime import datetime
 import pandas as pd
+import pybullet as p
 
 
 class VEGA:
     """
-    Virus-Host coEvolutionary Genetic Algorithm (VEGA) implementation
-    for multi-objective optimization of robot locomotion patterns.
-    This is a direct port of the C++ VEGA implementation from the original ODE codebase,
-    updated with modern Python logging practices.
+    Enhanced Virus-Host coEvolutionary Genetic Algorithm (VEGA) with 
+    comprehensive fitness function to prevent leg vibrations and improve locomotion.
     """
     
     def __init__(self, population_size=30, chromosome_length=10, generations=500):
-        """
-        Initialize the VEGA algorithm with parameters matching the C++ implementation.
-        
-        Args:
-            population_size: Number of individuals in the population (GAN in C++)
-            chromosome_length: Maximum length of locomotion sequences (GAL in C++)
-            generations: Maximum number of generations to evolve
-        """
+        """Initialize the enhanced VEGA algorithm."""
         # Setup experiment logging
         self.experiment_id = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.log_dir = os.path.join('logs', 'evolution', self.experiment_id)
         os.makedirs(self.log_dir, exist_ok=True)
         self._setup_logging()
         
-        # Match parameters from C++ implementation
-        self.gan = population_size    # Host population size (GAN=30)
-        self.gav = 20                 # Virus population size (GAV=20)
-        self.gal = chromosome_length  # Chromosome length (GAL=10)
+        # Algorithm parameters
+        self.gan = population_size    # Host population size
+        self.gav = 20                 # Virus population size  
+        self.gal = chromosome_length  # Chromosome length
         
         # Robot parameters
-        self.dof = 3                  # Degree of freedom (DOF=3)
-        self.leg = 6                  # Number of legs (LEG=6)
+        self.dof = 3                  # Degree of freedom
+        self.leg = 6                  # Number of legs
         
-        # Angle limits and ranges (in degrees, matching C++)
-        self.q_min = np.array([-45, 0, 0])     # Min angle for target motion
-        self.q_range = np.array([90, 60, 60])  # Range for target motion
-        self.q_init = np.array([0, 45, 45])    # Init angle for target motion
+        # Angle limits (in degrees)
+        self.q_min = np.array([-45, 0, 0])
+        self.q_range = np.array([90, 60, 60])
+        self.q_init = np.array([0, 45, 45])
         
-        # Populations and fitness arrays (matching C++ structure)
-        # Host population: sequence of postures
+        # Populations and fitness arrays
         self.hosts = np.zeros((self.gan, self.gal, 2, self.dof))
-        # Virus population: individual joint angles
         self.virus = np.zeros((self.gav, self.dof))
         
-        self.host_lengths = np.zeros(self.gan, dtype=int)  # Length of each sequence
-        self.fitness = np.zeros((self.gan, 3))             # Host fitness for 3 objectives
-        self.fitv = np.zeros((self.gav, 3))               # Virus fitness for 3 objectives
+        self.host_lengths = np.zeros(self.gan, dtype=int)
+        # Enhanced fitness with multiple objectives
+        self.fitness = np.zeros((self.gan, 6))  # Increased from 3 to 6 objectives
+        self.fitv = np.zeros((self.gav, 6))
         
-        # For VEGA ranking
-        self.gac = np.full(self.gan, -1)               # Category assignments
+        # For VEGA ranking 
+        self.gac = np.full(self.gan, -1)
         
-        # Best fitness tracking
+        # Enhanced fitness tracking
         self.iterations = generations
-        # allocate one extra row so slices up to self.iteration+1 match range(self.iteration+1)
-        self.bfith  = np.zeros((self.iterations + 1, 3))
-        self.cfith  = np.zeros((self.iterations + 1, 3))
-        self.bhostl = np.zeros((self.iterations + 1, 3), dtype=int)
-        self.chostl = np.zeros(self.iterations + 1,     dtype=int)
-
-        # helper to auto-grow history arrays when needed
-        def _ensure_history_capacity(required_steps):
-            current = self.cfith.shape[0]
-            if required_steps > current:
-                pad = required_steps - current
-                self.cfith  = np.pad(self.cfith,  ((0, pad),(0,0)), mode='constant')
-                self.bfith  = np.pad(self.bfith,  ((0, pad),(0,0)), mode='constant')
-                self.bhostl = np.pad(self.bhostl, ((0, pad),(0,0)), mode='constant')
-                self.chostl = np.pad(self.chostl, (0, pad),       mode='constant')
-        self._ensure_history_capacity = _ensure_history_capacity
-
+        self.bfith  = np.zeros((self.iterations + 1, 6))  # Best fitness history
+        self.cfith  = np.zeros((self.iterations + 1, 6))  # Current fitness history
+        self.bhostl = np.zeros((self.iterations + 1, 6), dtype=int)
+        self.chostl = np.zeros(self.iterations + 1, dtype=int)
+        
+        # Fitness component weights (tunable)
+        self.fitness_weights = {
+            'forward_motion': 1.0,
+            'stability': 2.0,        # High weight for stability
+            'energy_efficiency': 0.5,
+            'smoothness': 1.5,       # High weight for smooth motion
+            'direction_control': 1.5,
+            'foot_contact': 2.0
+        }
+        
         # Current individual and sequence indices
-        self.gai = 0      # Current host ID for simulation
-        self.gaj = 0      # Current sequence ID
+        self.gai = 0
+        self.gaj = 0
         self.iteration = 0
         
-        # Evolutionary mode
-        self.ERmode = 0   # 0: all, 1:Forward, 2:Right Forward, 3:Right
+        # Enhanced tracking for stability
+        self.stability_history = []
+        self.prev_robot_state = None
+        self.motion_history = []
         
         # Initialize populations
         self.initialize_populations()
         
-        # For current objective selection
-        self.current_objective = None
+        # Create necessary directories
+        for subdir in ['models', 'checkpoints', 'data', 'plots']:
+            os.makedirs(os.path.join(self.log_dir, subdir), exist_ok=True)
         
-        # Create necessary directories for experiment data
-        os.makedirs(os.path.join(self.log_dir, 'models'), exist_ok=True)
-        os.makedirs(os.path.join(self.log_dir, 'checkpoints'), exist_ok=True)
-        os.makedirs(os.path.join(self.log_dir, 'data'), exist_ok=True)
-        os.makedirs(os.path.join(self.log_dir, 'plots'), exist_ok=True)
-        
-        # Save experiment configuration
         self._save_config()
         
-        self.logger.info(f"VEGA initialized with {self.gan} hosts, {self.gav} viruses, max sequence length {self.gal}")
-    
+        self.logger.info(f"Enhanced VEGA initialized with comprehensive fitness function")
+        
     def _setup_logging(self):
-        """Set up proper logging configuration."""
-        self.logger = logging.getLogger('vega_evolution')
+        """Set up logging configuration."""
+        self.logger = logging.getLogger('enhanced_vega')
         self.logger.setLevel(logging.INFO)
         
-        # Clear any existing handlers
         if self.logger.handlers:
             self.logger.handlers.clear()
         
-        # File handler for detailed logs
+        # File handler
         file_handler = logging.FileHandler(os.path.join(self.log_dir, 'evolution.log'))
         file_handler.setLevel(logging.INFO)
         
-        # Console handler for basic info
+        # Console handler
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
         
-        # Create formatter
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         file_handler.setFormatter(formatter)
         console_handler.setFormatter(formatter)
         
-        # Add handlers
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
     
     def _save_config(self):
-        """Save experiment configuration to JSON file."""
+        """Save experiment configuration."""
         config = {
             'population_size': self.gan,
             'virus_population': self.gav,
             'chromosome_length': self.gal,
+            'fitness_weights': self.fitness_weights,
             'q_min': self.q_min.tolist(),
             'q_range': self.q_range.tolist(),
             'q_init': self.q_init.tolist(),
@@ -147,46 +130,315 @@ class VEGA:
         config_file = os.path.join(self.log_dir, 'config.json')
         with open(config_file, 'w') as f:
             json.dump(config, f, indent=2)
-        
-        self.logger.info(f"Configuration saved to {config_file}")
+
+    def clear_motion_history(self):
+        """Reset the stored motion history used for smoothness calculation."""
+        self.motion_history = []
     
     def initialize_populations(self):
-        """Initialize the populations of hosts and viruses."""
+        """Initialize populations with better diversity."""
         # Initialize host population
         for i in range(self.gan):
-            # Random sequence length between 2 and 4 (matching C++ implementation)
+            # Random sequence length between 2 and 4
             self.host_lengths[i] = 2 + int(np.random.random() * 3)
             
-            # Initialize each position in the sequence
+            # Initialize each position with better constraints
             for m in range(self.host_lengths[i]):
                 for phase in range(2):
                     for j in range(self.dof):
-                        # Random angle within range
-                        self.hosts[i, m, phase, j] = self.q_min[j] + self.q_range[j] * np.random.random()
+                        # Use smaller initial variations to reduce extreme movements
+                        center = self.q_init[j] if j > 0 else 0  # Keep first DOF near 0
+                        variation = self.q_range[j] * 0.3  # Reduce initial variation
+                        
+                        angle = center + (np.random.random() - 0.5) * variation
+                        
+                        # Ensure within bounds
+                        angle = max(self.q_min[j], min(self.q_min[j] + self.q_range[j], angle))
+                        self.hosts[i, m, phase, j] = angle
         
         # Initialize virus population
         for i in range(self.gav):
             for j in range(self.dof):
                 self.virus[i, j] = self.q_min[j] + self.q_range[j] * np.random.random()
         
-        # Initialize fitness to zeros
-        self.fitness = np.zeros((self.gan, 3))
-        self.fitv = np.zeros((self.gav, 3))
+        # Initialize fitness arrays
+        self.fitness = np.zeros((self.gan, 6))
+        self.fitv = np.zeros((self.gav, 6))
         
-        self.logger.info(f"Populations initialized with varying sequence lengths (2-4)")
+        self.logger.info("Populations initialized with enhanced diversity control")
+    
+    def evaluate_fitness(self, robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id):
+        """
+        Enhanced fitness evaluation with multiple objectives to prevent vibrations.
+        
+        Args:
+            robot: Robot instance
+            prev_pos: Previous robot position
+            curr_pos: Current robot position  
+            prev_rot: Previous rotation matrix
+            curr_rot: Current rotation matrix
+            ground_id: PyBullet ID of the ground body
+            
+        Returns:
+            Updated fitness array for current individual
+        """
+        # Get robot state for comprehensive evaluation
+        robot_state = robot.get_state()
+        stability_metrics = robot.check_stability()
+        
+        # Calculate basic movement metrics
+        displacement = np.array(curr_pos) - np.array(prev_pos)
+        distance = np.sqrt(displacement[0]**2 + displacement[1]**2)
+        
+        # Calculate rotation change
+        if curr_rot[0, 0] == 0 and curr_rot[1, 0] == 0:
+            ra = 0
+        else:
+            ra = math.atan2(curr_rot[1, 0], curr_rot[0, 0])
+            
+        if prev_rot[0, 0] == 0 and prev_rot[1, 0] == 0:
+            rap = 0
+        else:
+            rap = math.atan2(prev_rot[1, 0], prev_rot[0, 0])
+            
+        yaw = ra
+        prev_yaw = rap
+        direction_error = yaw - prev_yaw
+        if direction_error > math.pi:
+            direction_error -= 2 * math.pi
+        elif direction_error < -math.pi:
+            direction_error += 2 * math.pi
+
+        angle_change = direction_error
+        
+        # Calculate direction alignment
+        rr = np.array([curr_rot[0, 0], curr_rot[1, 0]])  # Current direction
+        v = displacement[:2]  # Movement vector
+        
+        alignment = 0
+        if distance > 0:
+            alignment = np.dot(rr, v) / distance
+
+        # FIXED: Improved Fitness Components with proper scaling
+        
+        # 1. Forward Motion (normalized to [0, 1])
+        forward_base = math.exp(-angle_change**2) + distance * 10 + alignment
+        forward_fitness = np.clip(forward_base / 20.0, 0, 1)  # Normalize to [0,1]
+        
+        # 2. Stability (normalized to [0, 1])
+        stability_fitness = self._calculate_normalized_stability_fitness(
+            stability_metrics, curr_rot, robot_state
+        )
+        
+        # 3. Energy Efficiency (normalized to [0, 1]) 
+        energy_fitness = self._calculate_normalized_energy_fitness(robot_state, distance)
+        
+        # 4. Smoothness (FIXED: better scaling)
+        smoothness_fitness = self._calculate_normalized_smoothness_fitness(
+            robot, robot_state, displacement
+        )
+        
+        # 5. Direction Control (normalized to [0, 1])
+        direction_fitness = math.exp(-direction_error**2)  # Already in [0,1]
+        
+        # 6. Foot Contact Quality (normalized to [0, 1])
+        contact_fitness = self._calculate_normalized_contact_fitness(robot, ground_id)
+        
+        # FIXED: Weighted combination in normalized space [0, 1]
+        normalized_fitness = [
+            forward_fitness,
+            stability_fitness, 
+            energy_fitness,
+            smoothness_fitness,
+            direction_fitness,
+            contact_fitness
+        ]
+        
+        # Apply weights AFTER normalization
+        weighted_fitness = [
+            normalized_fitness[0] * self.fitness_weights['forward_motion'],
+            normalized_fitness[1] * self.fitness_weights['stability'],
+            normalized_fitness[2] * self.fitness_weights['energy_efficiency'], 
+            normalized_fitness[3] * self.fitness_weights['smoothness'],
+            normalized_fitness[4] * self.fitness_weights['direction_control'],
+            normalized_fitness[5] * self.fitness_weights['foot_contact']
+        ]
+
+        # FIXED: Additive penalties instead of multiplicative
+        stability_penalty = 0
+        if stability_metrics['vertical_stability'] < 0.3:
+            stability_penalty = 2.0  # Subtract penalty
+        elif stability_metrics['vertical_stability'] < 0.5:
+            stability_penalty = 1.0
+        
+        angular_penalty = 0
+        if stability_metrics['angular_speed'] > 6.0:
+            angular_penalty = 3.0
+        elif stability_metrics['angular_speed'] > 4.0:
+            angular_penalty = 1.5
+        
+        # Apply penalties by subtraction (keeps gradients)
+        final_fitness = [
+            max(0, weighted_fitness[0] - stability_penalty * 0.3),  # Forward
+            max(0, weighted_fitness[1] - stability_penalty),        # Stability  
+            max(0, weighted_fitness[2] - angular_penalty * 0.2),    # Energy
+            max(0, weighted_fitness[3] - angular_penalty * 0.2),    # Smoothness
+            max(0, weighted_fitness[4] - stability_penalty * 0.2),  # Direction
+            max(0, weighted_fitness[5] - stability_penalty * 0.1)   # Contact
+        ]
+        
+        self.fitness[self.gai] = final_fitness
+
+        # Track stability for monitoring
+        self.stability_history.append(stability_metrics['vertical_stability'])
+
+        # Update fitness history
+        for i in range(6):
+            self.cfith[self.iteration, i] = self.fitness[self.gai, i]
+        self.chostl[self.iteration] = self.host_lengths[self.gai]
+
+        # Log fitness metrics
+        self.logger.info(
+            f"Fitness - Forward: {self.fitness[self.gai, 0]:.3f}, Stability: {self.fitness[self.gai, 1]:.3f}, "
+            f"Energy: {self.fitness[self.gai, 2]:.3f}, Smoothness: {self.fitness[self.gai, 3]:.3f}, "
+            f"Direction: {self.fitness[self.gai, 4]:.3f}, Contact: {self.fitness[self.gai, 5]:.3f}"
+        )
+        
+        # Find best fitness for each objective
+        if self.iteration < self.gan:
+            h = self.iteration + 1
+        else:
+            h = self.gan
+            
+        for j in range(6):
+            k = 0
+            for i in range(h):
+                if self.fitness[i, j] > self.fitness[k, j]:
+                    k = i
+            self.bfith[self.iteration, j] = self.fitness[k, j]
+            self.bhostl[self.iteration, j] = self.host_lengths[k]
+        
+        # Reverse gait if moving backward
+        if alignment < -0.5:
+            self.logger.info(f"Reversing gait due to backward movement - alignment: {alignment:.3f}")
+            self.reverse(self.gai)
+        
+        # Store current state for next evaluation
+        self.prev_robot_state = robot_state
+        
+        return self.fitness[self.gai]
+    
+    def _calculate_normalized_stability_fitness(self, stability_metrics, curr_rot, robot_state):
+        """FIXED: Normalized stability fitness in [0, 1]."""
+        vertical_component = max(0, stability_metrics['vertical_stability'])
+        height_component = max(0, 1.0 / (1.0 + abs(robot_state['position'][2] - 0.35)))
+        
+        # More lenient angular penalty
+        angular_penalty = max(0, 1.0 / (1.0 + stability_metrics['angular_speed'] / 3.0))
+        
+        rot_matrix = np.array(curr_rot).reshape(3, 3)
+        try:
+            roll = math.asin(max(-0.99, min(0.99, -rot_matrix[2, 1])))
+            pitch = math.asin(max(-0.99, min(0.99, rot_matrix[2, 0])))
+            roll_pitch_stability = math.exp(-(roll**2 + pitch**2) / 2.0)  # More lenient
+        except:
+            roll_pitch_stability = 0.5
+        
+        # Weighted combination normalized to [0, 1]
+        stability_fitness = (
+            vertical_component * 0.5 +
+            height_component * 0.2 +
+            angular_penalty * 0.2 +
+            roll_pitch_stability * 0.1
+        )
+        
+        return np.clip(stability_fitness, 0, 1)
+    
+    def _calculate_normalized_energy_fitness(self, robot_state, distance):
+        """FIXED: Normalized energy fitness in [0, 1]."""
+        joint_angles = robot_state['joint_angles']
+        
+        if self.prev_robot_state is not None:
+            prev_angles = self.prev_robot_state['joint_angles']
+            joint_velocities = np.abs(joint_angles - prev_angles)
+            
+            # Energy cost
+            energy_cost = np.mean(joint_velocities**2)  # Use mean instead of sum
+            
+            # Efficiency = distance per unit energy cost
+            if energy_cost > 0:
+                efficiency = distance / (energy_cost + 0.01)
+            else:
+                efficiency = distance
+        else:
+            efficiency = distance
+        
+        # Normalize to [0, 1] - assume max efficiency around 5.0
+        return np.clip(efficiency / 5.0, 0, 1)
+    
+    def _calculate_normalized_smoothness_fitness(self, robot, robot_state, displacement):
+        """FIXED: Normalized smoothness fitness in [0, 1] with better scaling."""
+        smoothness_score = 0
+        
+        # Track motion history for smoothness calculation
+        self.motion_history.append({
+            'position': robot_state['position'],
+            'displacement': displacement,
+            'joint_angles': robot_state['joint_angles']
+        })
+        
+        # Keep only recent history
+        if len(self.motion_history) > 5:  # Shorter history for responsiveness
+            self.motion_history.pop(0)
+        
+        if len(self.motion_history) >= 3:
+            # Calculate velocity smoothness
+            recent_displacements = [m['displacement'] for m in self.motion_history[-3:]]
+            
+            vel_changes = []
+            for i in range(1, len(recent_displacements)):
+                vel_change = np.linalg.norm(recent_displacements[i] - recent_displacements[i-1])
+                vel_changes.append(vel_change)
+            
+            # FIXED: More lenient exponential decay
+            if vel_changes:
+                avg_vel_change = np.mean(vel_changes)
+                smoothness_score = math.exp(-avg_vel_change * 2)  # Reduced from 10
+            
+            # Joint angle smoothness
+            recent_angles = [m['joint_angles'] for m in self.motion_history[-3:]]
+            angle_changes = []
+            for i in range(1, len(recent_angles)):
+                angle_change = np.mean(np.abs(recent_angles[i] - recent_angles[i-1]))  # Mean instead of norm
+                angle_changes.append(angle_change)
+            
+            if angle_changes:
+                avg_angle_change = np.mean(angle_changes)
+                joint_smoothness = math.exp(-avg_angle_change * 1)  # Reduced from 2
+                smoothness_score = (smoothness_score + joint_smoothness) / 2
+        
+        return np.clip(smoothness_score, 0, 1)
+    
+    def _calculate_normalized_contact_fitness(self, robot, ground_id):
+        """FIXED: Normalized contact fitness in [0, 1]."""
+        contacts = 0
+        for i in range(robot.leg_count):
+            foot_link = robot.leg_joints[i][2]
+            pts = p.getContactPoints(bodyA=robot.body_id, linkIndexA=foot_link, bodyB=ground_id)
+            if len(pts) > 0:
+                contacts += 1
+
+        # Already normalized to [0, 1]
+        return contacts / robot.leg_count
     
     def rank(self):
-        """
-        Rank individuals based on fitness for multi-objective optimization.
-        Direct port of VEGA_rank() from C++ implementation.
-        """
+        """Enhanced ranking for multi-objective optimization."""
         # Reset categories
         self.gac = np.full(self.gan, -1)
         
-        # Assign individuals to objective categories
+        # Assign individuals to objective categories (now 6 objectives)
         for j in range(self.gan):
-            # Determine objective based on index (cycling through objectives)
-            h = j % 3
+            h = j % 6  # Cycle through 6 objectives instead of 3
             
             # Find first unassigned individual
             k = 0
@@ -198,657 +450,415 @@ class VEGA:
                 if self.gac[i] == -1 and self.fitness[i, h] > self.fitness[k, h]:
                     k = i
             
-            # Assign category
             self.gac[k] = h
         
-        # Log rankings
-        rank_str = "\nRankings:\n"
+        # Log enhanced rankings
+        rank_str = "\nEnhanced Rankings (6 objectives):\n"
+        obj_names = ["Forward", "Stability", "Energy", "Smoothness", "Direction", "Contact"]
         for i in range(self.gan):
-            rank_str += f"r[{i}]:{self.gac[i]}, {self.fitness[i, self.gac[i]]:.2f}\n"
-        rank_str += "\n"
+            h = self.gac[i]
+            if h >= 0 and h < len(obj_names):
+                rank_str += f"r[{i}]:{obj_names[h]}, {self.fitness[i, h]:.2f}\n"
         
         self.logger.info(rank_str)
     
-    def reverse(self, n):
-        """
-        Reverse the motion sequence for an individual.
-        Direct port of VEGA_reverse() from C++ implementation.
-        
-        Args:
-            n: Individual index to reverse
-        """
-        self.logger.info(f"Reverse motion sequence for individual {n}")
-        
-        # Reverse yaw (first DOF - leg angle) for each position in sequence
-        for m in range(self.host_lengths[n]):
-            for i in range(2):  # For both phases
-                for j in range(0, self.dof, 3):  # Only modify first DOF (leg angle)
-                    self.hosts[n, m, i, j] = -self.hosts[n, m, i, j]
-    
-    def exchange_lr(self, n):
-        """
-        Exchange left and right phases.
-        Direct port of VEGA_LR() from C++ implementation.
-        
-        Args:
-            n: Individual index to modify
-        """
-        self.logger.info(f"Phase exchange for individual {n}")
-        
-        # Exchange phases for each position in sequence
-        for m in range(self.host_lengths[n]):
-            for j in range(0, self.dof, 3):  # Only for first DOF (leg angle)
-                # Swap phase 0 and phase 1
-                d = self.hosts[n, m, 0, j]
-                self.hosts[n, m, 0, j] = self.hosts[n, m, 1, j]
-                self.hosts[n, m, 1, j] = d
-    
     def evolve(self):
-        """
-        Perform one generation of evolution.
-        Direct port of VEGA_main() from C++ implementation.
-        """
-        # First rank the population
+        """Enhanced evolution with better stability focus."""
         self.rank()
         
-        # Determine which objective to focus on
-        if self.ERmode == 0:
-            h = self.iteration % 3      # Cycle through objectives
+        # Focus on stability-related objectives more often
+        if self.iteration % 6 in [1, 3]:  # Focus on stability 2/6 times
+            h = 1  # Stability objective
         else:
-            h = self.ERmode - 1         # Use specific mode
+            h = self.iteration % 6
             
-        obj_names = ["Forward", "Right Forward", "Right Turn"]
+        obj_names = ["Forward", "Stability", "Energy", "Smoothness", "Direction", "Contact"]
         
-        # Find worst and best individual for this objective
-        g1 = 0  # Worst individual (to be replaced)
+        # Find worst and best individuals for this objective
+        g1 = 0  # Worst
         while self.gac[g1] != h:
             g1 += 1
-        g2 = g1  # Best individual (to copy from)
+        g2 = g1  # Best
         
         for i in range(g1+1, self.gan):
             if self.gac[i] == h:
-                if self.fitness[i, h] < self.fitness[g1, h]:   # Find worst
-                    g1 = i  
-                elif self.fitness[i, h] > self.fitness[g2, h]:  # Find best
+                if self.fitness[i, h] < self.fitness[g1, h]:
+                    g1 = i
+                elif self.fitness[i, h] > self.fitness[g2, h]:
                     g2 = i
         
-        # Early generations: search for best solution
-        if self.iteration < 100:
-            self.logger.info(f"Search for {obj_names[h]}")
-            
-            # Random individual for crossover
-            g3 = int(self.gan * np.random.random())
-            r = np.random.random() * 0.5
-            
-            # Copy sequence length from best to worst
-            self.host_lengths[g1] = self.host_lengths[g2]
-            
-            # Apply crossover and mutation
-            for m in range(self.host_lengths[g1]):
-                for i in range(2):  # Two phases
-                    for j in range(self.dof):
-                        if (np.random.random() < r) and (m < self.host_lengths[g3]):
-                            # Crossover with random individual + mutation
-                            self.hosts[g1, m, i, j] = (
-                                self.hosts[g3, m, i, j] + 
-                                self.randn() * self.q_range[j] * 0.2
-                            )
-                        else:
-                            # Crossover with best individual + mutation
-                            self.hosts[g1, m, i, j] = (
-                                self.hosts[g2, m, i, j] + 
-                                self.randn() * self.q_range[j] * 0.1
-                            )
-                        
-                        # Enforce bounds
-                        if self.hosts[g1, m, i, j] < self.q_min[j]:
-                            self.hosts[g1, m, i, j] = self.q_min[j] + np.random.random() * 0.01
-                        elif self.hosts[g1, m, i, j] > self.q_min[j] + self.q_range[j]:
-                            self.hosts[g1, m, i, j] = self.q_min[j] + self.q_range[j] - np.random.random() * 0.01
-            
-            # Apply specialized mutations with some probability
-            
-            # 1. Insertion mutation (15% chance)
-            if (self.host_lengths[g1] < self.gal - 1 and np.random.random() < 0.15):
-                self.logger.info("-- insertion mutation --")
-                k = int(self.host_lengths[g1] * np.random.random())
-                
-                if k < self.host_lengths[g1]:
-                    # Shift all positions after insertion point
-                    for m in range(self.host_lengths[g1], k, -1):
-                        for i in range(2):
-                            for j in range(self.dof):
-                                self.hosts[g1, m, i, j] = self.hosts[g1, m-1, i, j]
-                    
-                    # Insert random posture
-                    for i in range(2):
-                        for j in range(self.dof):
-                            self.hosts[g1, k, i, j] = self.q_min[j] + self.q_range[j] * np.random.random()
-                
-                self.host_lengths[g1] += 1
-            
-            # 2. Deletion mutation (15% chance)
-            elif (self.host_lengths[g1] > 2 and np.random.random() < 0.15):
-                self.logger.info("-- deletion mutation --")
-                self.host_lengths[g1] -= 1
-                k = int(self.host_lengths[g1] * np.random.random())
-                
-                if k < self.host_lengths[g1] - 1:
-                    # Shift all positions after deletion point
-                    for m in range(k, self.host_lengths[g1]):
-                        for i in range(2):
-                            for j in range(self.dof):
-                                self.hosts[g1, m, i, j] = self.hosts[g1, m+1, i, j]
-            
-            # 3. Phase exchange mutation (10% chance)
-            if np.random.random() < 0.1:
-                self.logger.info("-- phase exchange mutation --")
-                m = int(self.host_lengths[g1] * np.random.random())
-                
-                # Swap phases
+        self.logger.info(f"Evolving for {obj_names[h]} objective")
+        
+        # Apply evolution with enhanced mutation rates for stability
+        g3 = int(self.gan * np.random.random())
+        # FIXED: Reduced crossover rate for stability
+        r = np.random.random() * 0.3  # Reduced from 0.4
+        
+        # Copy sequence length
+        self.host_lengths[g1] = self.host_lengths[g2]
+        
+        # FIXED: Enhanced mutation with stability focus
+        for m in range(self.host_lengths[g1]):
+            for i in range(2):
                 for j in range(self.dof):
-                    d = self.hosts[g1, m, 0, j]
-                    self.hosts[g1, m, 0, j] = self.hosts[g1, m, 1, j]
-                    self.hosts[g1, m, 1, j] = d
-            
-            # 4. Order exchange mutation (10% chance)
-            elif np.random.random() < 0.1:
-                k = int(self.host_lengths[g1] * np.random.random())
-                m = int(self.host_lengths[g1] * np.random.random())
-                
-                if k != m:
-                    self.logger.info("-- order exchange mutation --")
-                    # Swap positions in sequence
-                    for i in range(2):
-                        for j in range(self.dof):
-                            d = self.hosts[g1, m, i, j]
-                            self.hosts[g1, m, i, j] = self.hosts[g1, k, i, j]
-                            self.hosts[g1, k, i, j] = d
-            
-            # Set current individual to evolved offspring
-            self.gai = g1
-            
-        # Later generations: use best solution for given objective
-        else:
-            self.logger.info(f"Best Locomotion of {obj_names[h]}")
-            self.gai = g2
+                    if (np.random.random() < r) and (m < self.host_lengths[g3]):
+                        # FIXED: Much smaller mutations for stability
+                        mutation_factor = 0.05 if h == 1 else 0.1  # Halved mutation rates
+                        self.hosts[g1, m, i, j] = (
+                            self.hosts[g3, m, i, j] + 
+                            self.randn() * self.q_range[j] * mutation_factor
+                        )
+                    else:
+                        mutation_factor = 0.02 if h == 1 else 0.05  # Even smaller for best individual
+                        self.hosts[g1, m, i, j] = (
+                            self.hosts[g2, m, i, j] + 
+                            self.randn() * self.q_range[j] * mutation_factor
+                        )
+                    
+                    # Enforce bounds with safety margin
+                    self.hosts[g1, m, i, j] = np.clip(
+                        self.hosts[g1, m, i, j],
+                        self.q_min[j] + 0.1,  # Safety margin
+                        self.q_min[j] + self.q_range[j] - 0.1
+                    )
         
-        self.logger.info(f"Iterations: {self.iteration}, host: {self.gai}")
+        # FIXED: Reduced structural mutation probabilities  
+        mutation_prob = 0.05 if h == 1 else 0.08  # Halved from 0.1/0.15
         
-        # Save checkpoint occasionally
-        if self.iteration % 10 == 0:
-            self.save_checkpoint()
+        # Insertion mutation
+        if (self.host_lengths[g1] < self.gal - 1 and np.random.random() < mutation_prob):
+            self.logger.info("-- insertion mutation --")
+            self._apply_insertion_mutation(g1)
+        
+        # Deletion mutation  
+        elif (self.host_lengths[g1] > 2 and np.random.random() < mutation_prob):
+            self.logger.info("-- deletion mutation --")
+            self._apply_deletion_mutation(g1)
+        
+        # Phase exchange (reduced probability for stability)
+        if np.random.random() < mutation_prob * 0.5:
+            self.logger.info("-- phase exchange mutation --")
+            self._apply_phase_exchange_mutation(g1)
+        
+        # Order exchange
+        elif np.random.random() < mutation_prob:
+            self.logger.info("-- order exchange mutation --")
+            self._apply_order_exchange_mutation(g1)
+        
+        self.gai = g1
+        self.clear_motion_history()
+        self.logger.info(f"Individual {self.gai} selected for {obj_names[h]}")
     
-    def evaluate_fitness(self, robot, prev_pos, curr_pos, prev_rot, curr_rot):
-        """
-        Calculate fitness values for the current motion.
-        Directly follows the fitness calculation in loco_main() from the C++ code.
+    def _apply_insertion_mutation(self, individual):
+        """Apply insertion mutation."""
+        k = int(self.host_lengths[individual] * np.random.random())
         
-        Args:
-            robot: Robot instance
-            prev_pos: Previous robot position
-            curr_pos: Current robot position
-            prev_rot: Previous rotation matrix
-            curr_rot: Current rotation matrix
+        if k < self.host_lengths[individual]:
+            # Shift positions
+            for m in range(self.host_lengths[individual], k, -1):
+                for i in range(2):
+                    for j in range(self.dof):
+                        self.hosts[individual, m, i, j] = self.hosts[individual, m-1, i, j]
             
-        Returns:
-            Updated fitness array for the current individual
-        """
-        # dynamically grow history arrays if iteration exceeds current capacity
-        self._ensure_history_capacity(self.iteration + 1)
-
-        # Extract rotation angle (around z-axis) from rotation matrices
-        if curr_rot[0, 0] == 0 and curr_rot[1, 0] == 0:
-            ra = 0
-        else:
-            ra = math.atan2(curr_rot[1, 0], curr_rot[0, 0])
-            
-        # Previous angle
-        if prev_rot[0, 0] == 0 and prev_rot[1, 0] == 0:
-            rap = 0
-        else:
-            rap = math.atan2(prev_rot[1, 0], prev_rot[0, 0])
-            
-        # Calculate angle change
-        a = ra - rap
-        if a > math.pi:
-            a -= 2 * math.pi
-        elif a < -math.pi:
-            a += 2 * math.pi
-            
-        # Calculate fitness metrics for each objective
-        # 1. Forward motion - reward going straight
-        f0 = math.exp(-a * a)
-        # 2. Left turn - reward turning left
-        f1 = math.exp(-(a - math.pi * 0.5) * (a - math.pi * 0.5))
-        # 3. Right turn - reward turning right
-        f2 = math.exp(-(a + math.pi * 0.5) * (a + math.pi * 0.5))
+            # Insert new posture with conservative values
+            for i in range(2):
+                for j in range(self.dof):
+                    center = self.q_init[j] if j > 0 else 0
+                    variation = self.q_range[j] * 0.2  # Conservative variation
+                    self.hosts[individual, k, i, j] = center + (np.random.random() - 0.5) * variation
         
-        # Get robot orientation (z-direction)
-        posz = 1  # Default upright
-        if curr_rot[2, 2] < -0.7:  # Check if robot is upside down
-            posz = -1  # Flipped over
-            
-        # Calculate movement direction
-        rr = np.array([curr_rot[0, 0], curr_rot[1, 0]])  # Current direction vector (x-axis)
-        v = np.array([curr_pos[0] - prev_pos[0], curr_pos[1] - prev_pos[1]])  # Movement vector
+        self.host_lengths[individual] += 1
+    
+    def _apply_deletion_mutation(self, individual):
+        """Apply deletion mutation.""" 
+        self.host_lengths[individual] -= 1
+        k = int(self.host_lengths[individual] * np.random.random())
         
-        # Calculate distance moved
-        d = np.sqrt(np.sum(v * v))
+        if k < self.host_lengths[individual] - 1:
+            # Shift positions
+            for m in range(k, self.host_lengths[individual]):
+                for i in range(2):
+                    for j in range(self.dof):
+                        self.hosts[individual, m, i, j] = self.hosts[individual, m+1, i, j]
+    
+    def _apply_phase_exchange_mutation(self, individual):
+        """Apply phase exchange mutation."""
+        m = int(self.host_lengths[individual] * np.random.random())
         
-        # Calculate alignment between direction and movement
-        q = 0
-        if d != 0:
-            q = np.dot(rr, v) / d  # cosine of angle between direction and movement
-            
-        # Update fitness for the current individual for each objective
-        # Forward motion: maximize distance and alignment
-        self.fitness[self.gai, 0] = f0 + d * 10 + q
-        # Left turn: reward turning left (note: identical to right turn in C++ code)
-        self.fitness[self.gai, 1] = f1 * 20 + math.exp(-d * d)
-        # Right turn: reward turning right
-        self.fitness[self.gai, 2] = f2 * 20 + math.exp(-d * d)
+        # Swap phases
+        for j in range(self.dof):
+            temp = self.hosts[individual, m, 0, j]
+            self.hosts[individual, m, 0, j] = self.hosts[individual, m, 1, j]
+            self.hosts[individual, m, 1, j] = temp
+    
+    def _apply_order_exchange_mutation(self, individual):
+        """Apply order exchange mutation."""
+        k = int(self.host_lengths[individual] * np.random.random())
+        m = int(self.host_lengths[individual] * np.random.random())
         
-        # Update fitness history
-        for i in range(3):
-            self.cfith[self.iteration, i] = self.fitness[self.gai, i]
-            
-        self.chostl[self.iteration] = self.host_lengths[self.gai]
+        if k != m:
+            # Swap positions
+            for i in range(2):
+                for j in range(self.dof):
+                    temp = self.hosts[individual, k, i, j]
+                    self.hosts[individual, k, i, j] = self.hosts[individual, m, i, j]
+                    self.hosts[individual, m, i, j] = temp
+    
+    def reverse(self, n):
+        """Reverse motion sequence for backward movement."""
+        self.logger.info(f"Reversing motion sequence for individual {n}")
         
-        # Log fitness metrics
-        self.logger.info(f"Walking distance: {d:.3f}, posture change: {q:.3f}, moving dir: {a:.3f}")
-        self.logger.info(f"Current fit[0,F]: {self.fitness[self.gai, 0]:.3f}/{f0:.3f}, "
-              f"fit[1,L]: {self.fitness[self.gai, 1]:.3f}/{f1:.3f}, "
-              f"fit[2,R]: {self.fitness[self.gai, 2]:.3f}/{f2:.3f}, pos-z: {curr_rot[2, 2]:.2f}")
-        
-        # Find best individual for each objective
-        if self.iteration < self.gan:
-            h = self.iteration + 1
-        else:
-            h = self.gan
-            
-        for j in range(3):
-            k = 0
-            for i in range(h):
-                if self.fitness[i, j] > self.fitness[k, j]:
-                    k = i
-            self.bfith[self.iteration, j] = self.fitness[k, j]
-            self.bhostl[self.iteration, j] = self.host_lengths[k]
-            
-        self.logger.info(f"Best fit[0,F]: {self.bfith[self.iteration, 0]:.3f}, "
-              f"fit[1,L]: {self.bfith[self.iteration, 1]:.3f}, "
-              f"fit[2,R]: {self.bfith[self.iteration, 2]:.3f}")
-        
-        # Check if alignment is negative (moving backward) - if so, reverse the sequence
-        if q < 0:
-            self.logger.info(f"\n\n[{self.gai}] Reverse: InnerP: {q}, angle: {a}\n\n")
-            self.reverse(self.gai)
-            
-        # Optionally, exchange left-right phases if angle is negative
-        # This is commented out in the original C++ code
-        # elif a < 0:
-        #     self.logger.info(f"\n\n[{self.gai}] ExchangeLR InnerP: {q}, angle: {a}\n\n")
-        #     self.exchange_lr(self.gai)
-        
-        # Save data occasionally
-        if self.iteration % 10 == 0:
-            self.save_fitness_data()
-            
-        return self.fitness[self.gai]
+        for m in range(self.host_lengths[n]):
+            for i in range(2):
+                for j in range(0, self.dof, 3):  # Only first DOF
+                    self.hosts[n, m, i, j] = -self.hosts[n, m, i, j]
     
     def get_target_angles(self):
-        """
-        Get target angles for the robot's current sequence position.
-        This follows the logic in loco_main() from the C++ code.
-        
-        Returns:
-            Array of target angles for all legs
-        """
-        # Get current sequence position
+        """Get target angles with enhanced bounds checking."""
         gaj = self.gaj % self.host_lengths[self.gai]
-        
-        # Create angles array (6 legs x 3 DOF)
         angles = np.zeros((6, 3))
         
-        # Set target angles from current sequence position
-        for i in range(6):  # 6 legs
-            for j in range(3):  # 3 DOF
-                # Determine which phase to use based on leg index
-                if j == 0:  # First DOF (leg angle)
-                    phase = 0 if i % 2 == 0 else 1  # Alternating phases for even/odd legs
-                    angles[i, j] = np.radians(self.hosts[self.gai, gaj, phase, j])
-                else:  # Other DOFs (middle and end joints)
+        for i in range(6):
+            for j in range(3):
+                if j == 0:  # First DOF
                     phase = 0 if i % 2 == 0 else 1
-                    # Apply signs based on which side of the robot
+                    angle_deg = self.hosts[self.gai, gaj, phase, j]
+                    # FIXED: Even more conservative range
+                    angle_deg = np.clip(angle_deg, -20, 20)  # Reduced from -30,30
+                    angles[i, j] = np.radians(angle_deg)
+                else:  # DOF 1 and 2
+                    phase = 0 if i % 2 == 0 else 1
+                    angle_deg = self.hosts[self.gai, gaj, phase, j]
+                    # FIXED: Conservative joint limits with safety margins
+                    min_angle = self.q_min[j] + 2.0  # Safety margin
+                    max_angle = self.q_min[j] + self.q_range[j] - 2.0
+                    angle_deg = np.clip(angle_deg, min_angle, max_angle)
+                    
                     if i < 3:  # Right side
-                        angles[i, j] = -np.radians(self.hosts[self.gai, gaj, phase, j])
+                        angles[i, j] = -np.radians(angle_deg)
                     else:  # Left side
-                        angles[i, j] = np.radians(self.hosts[self.gai, gaj, phase, j])
+                        angles[i, j] = np.radians(angle_deg)
         
-        # Apply posz to handle flipped robot (if it flips over)
-        posz = 1  # Upright by default
-        # In a real implementation, this would be determined from the robot's orientation
-        if posz != 1:
-            angles = angles * posz
-            
         return angles
     
-    def create_controller(self):
-        """
-        Create a controller from the current individual.
+    def plot_enhanced_fitness_history(self):
+        """Plot comprehensive fitness history for all 6 objectives."""
+        plt.figure(figsize=(15, 20))
         
-        Returns:
-            Controller dictionary with sequence information
-        """
-        controller = {
-            'type': 'sequence_controller',
-            'sequence_length': self.host_lengths[self.gai],
-            'sequences': self.hosts[self.gai, :self.host_lengths[self.gai]].copy()
-        }
-        return controller
-    
-    def save_best_controller(self):
-        """
-        Save the best evolved controller for deployment.
+        objectives = ["Forward", "Stability", "Energy", "Smoothness", "Direction", "Contact"]
         
-        Returns:
-            Path to the saved controller file
-        """
-        # Find best individual for forward movement
-        best_idx = np.argmax(self.fitness[:, 0])
-        
-        controller = {
-            'type': 'locomotion_controller',
-            'sequence_length': self.host_lengths[best_idx],
-            'sequences': self.hosts[best_idx, :self.host_lengths[best_idx]].copy(),
-            'fitness': self.fitness[best_idx].copy(),
-            'creation_date': time.strftime("%Y-%m-%d-%H:%M:%S"),
-            'parameters': {
-                'dof': self.dof,
-                'q_min': self.q_min.tolist(),
-                'q_range': self.q_range.tolist()
-            },
-            'experiment_id': self.experiment_id
-        }
-        
-        # Save to file
-        filename = os.path.join(self.log_dir, 'models', f"evolved_controller_{time.strftime('%Y%m%d_%H%M%S')}.pkl")
-        with open(filename, 'wb') as f:
-            pickle.dump(controller, f)
-        
-        self.logger.info(f"Best controller saved to {filename} for deployment")
-        return filename
-    
-    def save_fitness_data(self):
-        """
-        Save fitness data to CSV file.
-        
-        Returns:
-            Path to the saved CSV file and plot
-        """
-        # Ensure history arrays can hold this iteration + 1
-        self._ensure_history_capacity(self.iteration + 1)
-        # Create DataFrame with all relevant data
-        data = {
-            'iteration': range(self.iteration + 1),
-            'best_forward': self.bfith[:self.iteration + 1, 0],
-            'current_forward': self.cfith[:self.iteration + 1, 0],
-            'best_right_forward': self.bfith[:self.iteration + 1, 1],
-            'current_right_forward': self.cfith[:self.iteration + 1, 1],
-            'best_right_turn': self.bfith[:self.iteration + 1, 2],
-            'current_right_turn': self.cfith[:self.iteration + 1, 2],
-            'best_host_length_forward': self.bhostl[:self.iteration + 1, 0],
-            'best_host_length_right_forward': self.bhostl[:self.iteration + 1, 1],
-            'best_host_length_right_turn': self.bhostl[:self.iteration + 1, 2],
-            'current_host_length': self.chostl[:self.iteration + 1]
-        }
-        
-        # Create DataFrame
-        df = pd.DataFrame(data)
-        
-        # Save to CSV
-        csv_filename = os.path.join(self.log_dir, 'data', f"evolution_data_{self.iteration:06d}.csv")
-        df.to_csv(csv_filename, index=False)
-        self.logger.info(f"Fitness data saved to {csv_filename}")
-        
-        # Generate plots
-        plot_path = self._generate_fitness_plots(df)
-        
-        return csv_filename, plot_path
-    
-    def _generate_fitness_plots(self, df):
-        """
-        Generate fitness plots from the DataFrame.
-        
-        Args:
-            df: DataFrame with fitness data
-            
-        Returns:
-            Path to saved plot file
-        """
-        try:
-            fig, axs = plt.subplots(3, 1, figsize=(10, 15))
-            
-            # Forward fitness
-            axs[0].plot(df['iteration'], df['best_forward'], 'b-', label='Best')
-            axs[0].plot(df['iteration'], df['current_forward'], 'r--', label='Current')
-            axs[0].set_title('Forward Fitness')
-            axs[0].set_xlabel('Iteration')
-            axs[0].set_ylabel('Fitness')
-            axs[0].legend()
-            axs[0].grid(True)
-            
-            # Right forward fitness
-            axs[1].plot(df['iteration'], df['best_right_forward'], 'b-', label='Best')
-            axs[1].plot(df['iteration'], df['current_right_forward'], 'r--', label='Current')
-            axs[1].set_title('Right Forward Fitness')
-            axs[1].set_xlabel('Iteration')
-            axs[1].set_ylabel('Fitness')
-            axs[1].legend()
-            axs[1].grid(True)
-            
-            # Right turn fitness
-            axs[2].plot(df['iteration'], df['best_right_turn'], 'b-', label='Best')
-            axs[2].plot(df['iteration'], df['current_right_turn'], 'r--', label='Current')
-            axs[2].set_title('Right Turn Fitness')
-            axs[2].set_xlabel('Iteration')
-            axs[2].set_ylabel('Fitness')
-            axs[2].legend()
-            axs[2].grid(True)
-            
-            plt.tight_layout()
-            
-            # Save plot
-            plot_path = os.path.join(self.log_dir, 'plots', f"fitness_{self.iteration:06d}.png")
-            plt.savefig(plot_path)
-            plt.close()
-            
-            self.logger.info(f"Fitness plots saved to {plot_path}")
-            return plot_path
-            
-        except Exception as e:
-            self.logger.error(f"Error generating plots: {e}")
-            return None
-    
-    def save_checkpoint(self):
-        """
-        Save a checkpoint of the algorithm's current state for resuming later.
-        
-        Returns:
-            Path to the checkpoint file
-        """
-        checkpoint = {
-            'iteration': self.iteration,
-            'gan': self.gan,
-            'gav': self.gav,
-            'gal': self.gal,
-            'hosts': self.hosts.copy(),
-            'virus': self.virus.copy(),
-            'host_lengths': self.host_lengths.copy(),
-            'fitness': self.fitness.copy(),
-            'fitv': self.fitv.copy(),
-            'best_fitness': self.bfith.copy(),
-            'current_fitness': self.cfith.copy(),
-            'best_host_lengths': self.bhostl.copy(),
-            'current_host_lengths': self.chostl.copy(),
-            'gai': self.gai,
-            'gaj': self.gaj,
-            'ERmode': self.ERmode,
-            'q_min': self.q_min,
-            'q_range': self.q_range,
-            'q_init': self.q_init,
-            'timestamp': time.time(),
-            'experiment_id': self.experiment_id
-        }
-        
-        filename = os.path.join(self.log_dir, 'checkpoints', f"vega_checkpoint_{self.iteration:06d}.pkl")
-        with open(filename, 'wb') as f:
-            pickle.dump(checkpoint, f)
-        
-        self.logger.info(f"Checkpoint saved to {filename}")
-        return filename
-    
-    @classmethod
-    def load_checkpoint(cls, filename):
-        """
-        Load a saved checkpoint to resume evolution.
-        
-        Args:
-            filename: Path to the checkpoint file
-            
-        Returns:
-            VEGA instance loaded from checkpoint
-        """
-        with open(filename, 'rb') as f:
-            checkpoint = pickle.load(f)
-        
-        # Create a new instance
-        vega = cls(
-            population_size=checkpoint['gan'],
-            chromosome_length=checkpoint['gal'],
-            generations=len(checkpoint['best_fitness'])
-        )
-        
-        # Override log directory with the one from the checkpoint
-        if 'experiment_id' in checkpoint:
-            vega.experiment_id = checkpoint['experiment_id']
-            vega.log_dir = os.path.join('logs', 'evolution', vega.experiment_id)
-            vega._setup_logging()
-        
-        # Restore state from checkpoint
-        vega.iteration = checkpoint['iteration']
-        vega.hosts = checkpoint['hosts']
-        if 'virus' in checkpoint:
-            vega.virus = checkpoint['virus']
-        vega.host_lengths = checkpoint['host_lengths']
-        vega.fitness = checkpoint['fitness']
-        if 'fitv' in checkpoint:
-            vega.fitv = checkpoint['fitv']
-        vega.bfith = checkpoint['best_fitness']
-        vega.cfith = checkpoint['current_fitness']
-        vega.bhostl = checkpoint['best_host_lengths']
-        vega.chostl = checkpoint['current_host_lengths']
-        vega.gai = checkpoint['gai']
-        vega.gaj = checkpoint['gaj']
-        if 'ERmode' in checkpoint:
-            vega.ERmode = checkpoint['ERmode']
-        
-        vega.logger.info(f"Loaded checkpoint from iteration {vega.iteration}")
-        return vega
-    
-    @staticmethod
-    def load_controller(filename):
-        """
-        Load a previously saved controller for deployment.
-        
-        Args:
-            filename: Path to the controller file
-            
-        Returns:
-            Loaded controller
-        """
-        with open(filename, 'rb') as f:
-            controller = pickle.load(f)
-        
-        print(f"Loaded controller from {filename}")
-        print(f"Sequence length: {controller['sequence_length']}")
-        if 'fitness' in controller:
-            print(f"Fitness values: {controller['fitness']}")
-        
-        return controller
-    
-    def plot_fitness_history(self):
-        """
-        Plot the complete fitness history of all objectives.
-        
-        Returns:
-            Path to the saved plot
-        """
-        # Create figure
-        plt.figure(figsize=(12, 15))
-        
-        # Plot all objectives
-        objectives = ["Forward", "Right Forward", "Right Turn"]
-        for i in range(3):
-            plt.subplot(4, 1, i+1)
+        for i in range(6):
+            plt.subplot(7, 1, i+1)
             plt.plot(self.bfith[:self.iteration+1, i], 'b-', label=f'Best {objectives[i]}')
             plt.plot(self.cfith[:self.iteration+1, i], 'r--', label=f'Current {objectives[i]}')
             plt.legend()
             plt.grid(True)
             plt.ylabel('Fitness')
-            plt.title(f'{objectives[i]} Fitness')
+            plt.title(f'{objectives[i]} Fitness Evolution')
         
-        # Plot sequence lengths
-        plt.subplot(4, 1, 4)
-        for i in range(3):
-            plt.plot(self.bhostl[:self.iteration+1, i], '-', label=f'Best {objectives[i]} Length')
-        plt.plot(self.chostl[:self.iteration+1], 'k--', label='Current Length')
-        plt.legend()
-        plt.grid(True)
-        plt.ylabel('Sequence Length')
-        plt.xlabel('Generation')
-        plt.title('Evolution of Sequence Lengths')
+        # Plot stability history
+        plt.subplot(7, 1, 7)
+        if self.stability_history:
+            plt.plot(self.stability_history, 'g-', label='Vertical Stability')
+            plt.axhline(y=0.7, color='r', linestyle='--', label='Stability Threshold')
+            plt.legend()
+            plt.grid(True)
+            plt.ylabel('Stability')
+            plt.xlabel('Evaluation')
+            plt.title('Robot Stability Over Time')
         
         plt.tight_layout()
         
-        # Save plot
-        plot_path = os.path.join(self.log_dir, 'plots', f"complete_fitness_history.png")
+        plot_path = os.path.join(self.log_dir, 'plots', 'enhanced_fitness_history.png')
         plt.savefig(plot_path)
         plt.close()
         
-        self.logger.info(f"Complete fitness history plot saved to {plot_path}")
+        self.logger.info(f"Enhanced fitness history plot saved to {plot_path}")
         return plot_path
-    
-    def save_summary(self):
-        """Save a summary of the evolution run."""
-        summary = {
-            'experiment_id': self.experiment_id,
-            'total_iterations': self.iteration,
-            'best_fitness_forward': float(np.max(self.bfith[:self.iteration+1, 0])),
-            'best_fitness_right_forward': float(np.max(self.bfith[:self.iteration+1, 1])),
-            'best_fitness_right_turn': float(np.max(self.bfith[:self.iteration+1, 2])),
-            'best_individual_forward': int(np.argmax(self.fitness[:, 0])),
-            'best_individual_right_forward': int(np.argmax(self.fitness[:, 1])),
-            'best_individual_right_turn': int(np.argmax(self.fitness[:, 2])),
-            'end_time': datetime.now().isoformat(),
-            'total_runtime_seconds': time.time() - os.path.getctime(os.path.join(self.log_dir, 'config.json'))
-        }
-        
-        # Save summary
-        summary_path = os.path.join(self.log_dir, 'summary.json')
-        with open(summary_path, 'w') as f:
-            json.dump(summary, f, indent=2)
-            
-        self.logger.info(f"Evolution summary saved to {summary_path}")
-        return summary_path
     
     @staticmethod
     def randn():
-        """
-        Generate a random number from normal distribution.
-        Direct port of rndn() from the C++ code.
-        """
+        """Generate random number from normal distribution."""
         return (np.random.random() + np.random.random() + np.random.random() +
                 np.random.random() + np.random.random() + np.random.random() +
                 np.random.random() + np.random.random() + np.random.random() +
                 np.random.random() + np.random.random() + np.random.random() - 6.0)
+    
+    def save_fitness_data(self):
+        """Save enhanced fitness data with proper array length handling."""
+        # Ensure we have valid iteration count
+        if self.iteration < 0:
+            self.iteration = 0
+        
+        # Create base data with consistent lengths
+        num_iterations = self.iteration + 1
+        
+        data = {
+            'iteration': range(num_iterations),
+            'best_forward': self.bfith[:num_iterations, 0],
+            'best_stability': self.bfith[:num_iterations, 1],
+            'best_energy': self.bfith[:num_iterations, 2],
+            'best_smoothness': self.bfith[:num_iterations, 3],
+            'best_direction': self.bfith[:num_iterations, 4],
+            'best_contact': self.bfith[:num_iterations, 5],
+            'current_forward': self.cfith[:num_iterations, 0],
+            'current_stability': self.cfith[:num_iterations, 1],
+            'current_energy': self.cfith[:num_iterations, 2],
+            'current_smoothness': self.cfith[:num_iterations, 3],
+            'current_direction': self.cfith[:num_iterations, 4],
+            'current_contact': self.cfith[:num_iterations, 5]
+        }
+        
+        # Create DataFrame from base data first
+        df = pd.DataFrame(data)
+        
+        # Handle stability_history separately - it may have different length
+        if self.stability_history:
+            # Truncate or pad stability_history to match iteration count
+            if len(self.stability_history) >= num_iterations:
+                # Take the last num_iterations values
+                stability_data = self.stability_history[-num_iterations:]
+            else:
+                # Pad with the last value or zeros
+                stability_data = list(self.stability_history)
+                last_value = stability_data[-1] if stability_data else 0.0
+                while len(stability_data) < num_iterations:
+                    stability_data.append(last_value)
+            
+            df['stability_history'] = stability_data
+        else:
+            # If no stability history, fill with zeros
+            df['stability_history'] = [0.0] * num_iterations
+        
+        # Save to CSV
+        csv_filename = os.path.join(self.log_dir, 'data', f"enhanced_evolution_data_{self.iteration:06d}.csv")
+        df.to_csv(csv_filename, index=False)
+        
+        self.logger.info(f"Enhanced fitness data saved to {csv_filename}")
+        return csv_filename
+    
+    def save_best_controller(self, filename=None):
+        """
+        Save the best controller (chromosome) found during evolution.
+        
+        Args:
+            filename: Optional filename to save to. If None, auto-generates.
+            
+        Returns:
+            Path to saved controller file
+        """
+        if filename is None:
+            filename = os.path.join(self.log_dir, 'models', f'best_controller_{self.iteration:06d}.pkl')
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        
+        # Find best individual across all objectives
+        best_overall_idx = 0
+        best_overall_score = 0
+        
+        # Calculate weighted sum of all objectives for each individual
+        for i in range(self.gan):
+            weighted_score = (
+                self.fitness[i, 0] * self.fitness_weights['forward_motion'] +
+                self.fitness[i, 1] * self.fitness_weights['stability'] +
+                self.fitness[i, 2] * self.fitness_weights['energy_efficiency'] +
+                self.fitness[i, 3] * self.fitness_weights['smoothness'] +
+                self.fitness[i, 4] * self.fitness_weights['direction_control'] +
+                self.fitness[i, 5] * self.fitness_weights['foot_contact']
+            )
+            
+            if weighted_score > best_overall_score:
+                best_overall_score = weighted_score
+                best_overall_idx = i
+        
+        # Save best controller data
+        controller_data = {
+            'individual_index': best_overall_idx,
+            'sequence_length': self.host_lengths[best_overall_idx],
+            'sequences': self.hosts[best_overall_idx, :self.host_lengths[best_overall_idx], :, :].copy(),
+            'fitness_values': self.fitness[best_overall_idx].copy(),
+            'weighted_score': best_overall_score,
+            'fitness_weights': self.fitness_weights.copy(),
+            'iteration_found': self.iteration,
+            'chromosome_length': self.gal,
+            'dof': self.dof,
+            'q_min': self.q_min.copy(),
+            'q_range': self.q_range.copy(),
+            'q_init': self.q_init.copy(),
+            'experiment_id': self.experiment_id,
+            'timestamp': time.time()
+        }
+        
+        # Save using pickle
+        with open(filename, 'wb') as f:
+            pickle.dump(controller_data, f)
+        
+        self.logger.info(f"Best controller saved to {filename}")
+        self.logger.info(f"Best individual: {best_overall_idx}, Sequence length: {self.host_lengths[best_overall_idx]}")
+        self.logger.info(f"Fitness values: {self.fitness[best_overall_idx]}")
+        self.logger.info(f"Weighted score: {best_overall_score:.3f}")
+        
+        return filename
+    
+    def save_summary(self, filename=None):
+        """
+        Save a summary of the evolution results.
+        
+        Args:
+            filename: Optional filename to save to. If None, auto-generates.
+            
+        Returns:
+            Path to saved summary file
+        """
+        if filename is None:
+            filename = os.path.join(self.log_dir, f'evolution_summary_{self.iteration:06d}.json')
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        
+        # Calculate final statistics
+        final_stats = {}
+        
+        for i, obj_name in enumerate(['forward_motion', 'stability', 'energy_efficiency', 
+                                     'smoothness', 'direction_control', 'foot_contact']):
+            final_stats[obj_name] = {
+                'best_fitness': float(np.max(self.fitness[:, i])),
+                'mean_fitness': float(np.mean(self.fitness[:, i])),
+                'std_fitness': float(np.std(self.fitness[:, i])),
+                'final_best': float(self.bfith[self.iteration, i]) if self.iteration < len(self.bfith) else 0.0
+            }
+        
+        # FIXED: Ensure all values are JSON serializable
+        summary = {
+            'experiment_id': str(self.experiment_id),
+            'completion_time': float(time.time()),
+            'total_iterations': int(self.iteration),
+            'population_size': int(self.gan),
+            'chromosome_length_range': [int(np.min(self.host_lengths)), int(np.max(self.host_lengths))],
+            'fitness_weights': dict(self.fitness_weights),  # Ensure it's a regular dict
+            'final_statistics': final_stats,
+            'convergence_achieved': bool(len(self.stability_history) > 100 and np.mean(self.stability_history[-50:]) > 0.8),
+            'stability_failures': int(sum(1 for s in self.stability_history if s < 0.5) if self.stability_history else 0),
+            'avg_stability': float(np.mean(self.stability_history)) if self.stability_history else 0.0
+        }
+        
+        # FIXED: Custom JSON encoder to handle any remaining numpy types
+        class NumpyEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, (np.integer, np.int64, np.int32)):
+                    return int(obj)
+                elif isinstance(obj, (np.floating, np.float64, np.float32)):
+                    return float(obj)
+                elif isinstance(obj, (np.bool_, bool)):
+                    return bool(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return super().default(obj)
+        
+        # Save summary with custom encoder
+        with open(filename, 'w') as f:
+            json.dump(summary, f, indent=2, cls=NumpyEncoder)
+        
+        self.logger.info(f"Evolution summary saved to {filename}")
+        return filename

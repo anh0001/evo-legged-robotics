@@ -6,193 +6,397 @@ import math
 
 class LeggedRobot:
     """
-    A multi-legged robot model implemented in PyBullet using URDF.
-    This is a port of the original ODE robot model from the C++ code.
+    Enhanced legged robot with improved motor control to prevent vibrations.
+    Uses POSITION_CONTROL with proper PD gains instead of VELOCITY_CONTROL.
     """
     
     def __init__(self, client=None, urdf_path="src/robot/urdf/legged_robot.urdf"):
-        """
-        Initialize the robot with default parameters.
-        
-        Args:
-            client: PyBullet physics client ID
-            urdf_path: Path to the URDF file
-        """
-        # Store physics client
+        """Initialize the robot with enhanced motor control parameters."""
         self.client = client if client is not None else p.connect(p.DIRECT)
         
-        # Robot parameters (kept for reference and for control)
-        self.box_pos = [0.0, 0.0, 0.5]
+        # Robot parameters matching C++ code exactly
+        self.box_pos = [0.0, 0.0, 0.12]
         self.box_length = 1.0
         self.box_width = 0.4
         self.box_height = 0.2
+        self.box_mass = 1.0
         
-        # Robot leg parameters
-        self.leg_count = 6
-        self.total_legs = 18
-        self.dummy_legs = 6
-        self.dof = 3  # degrees of freedom per leg
+        # Leg parameters
+        self.bar_length = 0.1
+        self.bar_width = 0.2
+        self.bar_height = 0.1
+        self.bar_mass = 0.05
+        self.bar_rest = 0.04
         
-        # Min and max joint angles (in degrees, will be converted to radians)
-        self.q_min = [-45, 0, 0]
-        self.q_range = [90, 60, 60]
-        self.q_init = [0, 45, 45]
+        # Structure matching C++ code
+        self.dof = 3          # DOF per leg
+        self.leg_count = 6    # Number of legs
+        self.tleg = 18        # Total leg segments (TLEG)
+        self.dleg = 6         # Dummy legs (DLEG)
         
-        # Current and target joint angles
-        self.q_angle = np.zeros((self.leg_count, self.dof))
-        self.t_angle = np.zeros((self.leg_count, self.dof))
+        # Joint limits (in degrees, converted to radians when used)
+        self.q_min = np.array([-45, 0, 0])
+        self.q_range = np.array([90, 60, 60])
+        self.q_init = np.array([0, 45, 45])
+        
+        # Current and target angles for 6 legs x 3 DOF
+        self.qang = np.zeros((self.leg_count, self.dof))
+        self.tang = np.zeros((self.leg_count, self.dof))
+        
+        # Updated motor parameters
+        self.kp = 1.0              # Much lower
+        self.kd = 0.5              # Much lower
+        self.max_force = 3.5       # Much lower
+        
+        # Control parameters
+        self.posz = 1  # Normal: 1, Overturn: -1
         
         # Load URDF
         self._load_urdf(urdf_path)
         
-        # Store joint information
-        self._get_joint_info()
+        # Map joints properly
+        self._map_joints()
+        
+        # Apply enhanced dynamics to robot
+        self._configure_robot_dynamics()
     
     def _load_urdf(self, urdf_path):
-        """
-        Load the robot from URDF.
-        
-        Args:
-            urdf_path: Path to the URDF file
-        """
-        # Check if URDF file exists
+        """Load the robot from URDF."""
         if not os.path.exists(urdf_path):
             raise FileNotFoundError(f"URDF file not found: {urdf_path}")
         
-        # Load URDF
-        self.robot_id = p.loadURDF(
+        self.body_id = p.loadURDF(
             urdf_path,
             basePosition=self.box_pos,
-            useFixedBase=False
+            useFixedBase=False,
+            flags=p.URDF_USE_SELF_COLLISION | 
+                  p.URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS |
+                  p.URDF_GOOGLEY_UNDEFINED_COLORS
         )
         
-        # Enable self-collision
-        p.setCollisionFilterGroupMask(self.robot_id, -1, 0, 0)
-        
-        # Get number of joints
-        self.num_joints = p.getNumJoints(self.robot_id)
-        
-        print(f"Loaded robot from {urdf_path} with {self.num_joints} joints")
+        self.num_joints = p.getNumJoints(self.body_id)
+        print(f"Loaded robot with {self.num_joints} joints")
     
-    def _get_joint_info(self):
-        """Get information about all joints."""
-        # Initialize arrays for joint information
-        self.joint_indices = []
-        self.joint_names = []
-        self.joint_types = []
+    def _map_joints(self):
+        """Map joints to match C++ structure."""
+        self.joint2 = []  # Dummy leg joints
+        self.joint = []   # Active leg joints
+        self.leg_joints = {}  # Mapping from leg to joint indices
         
-        # Map from leg index to joint indices
-        self.leg_joints = {}
-        
-        # Get information about each joint
+        # Get all joint info
         for i in range(self.num_joints):
-            joint_info = p.getJointInfo(self.robot_id, i)
+            joint_info = p.getJointInfo(self.body_id, i)
             joint_name = joint_info[1].decode('utf-8')
             joint_type = joint_info[2]
             
-            # Store joint information
-            self.joint_indices.append(i)
-            self.joint_names.append(joint_name)
-            self.joint_types.append(joint_type)
-            
-            # Map joints to legs based on naming convention from URDF
-            if joint_name.startswith('joint_'):
-                # Extract leg index from joint name
-                try:
-                    leg_index = int(joint_name[6:])
-                    leg_group = leg_index // 3
-                    leg_segment = leg_index % 3
-                    
-                    # Initialize the leg group if not already
-                    if leg_group not in self.leg_joints:
-                        self.leg_joints[leg_group] = []
-                    
-                    # Store joint index with its segment position
-                    self.leg_joints[leg_group].append((i, leg_segment))
-                except ValueError:
-                    # Not a leg joint
-                    pass
+            # Map based on joint names from URDF
+            if joint_name.startswith('body_to_dummy_'):
+                # Dummy leg joint (fixed)
+                dummy_idx = int(joint_name.split('_')[-1])
+                self.joint2.append(i)
+            elif joint_name.startswith('joint_'):
+                # Active leg joint
+                joint_idx = int(joint_name.split('_')[-1])
+                self.joint.append(i)
         
-        # Sort joint indices within each leg by segment
-        for leg_group in self.leg_joints:
-            self.leg_joints[leg_group] = sorted(self.leg_joints[leg_group], key=lambda x: x[1])
-            # Keep only joint indices
-            self.leg_joints[leg_group] = [x[0] for x in self.leg_joints[leg_group]]
+        print(f"Mapped {len(self.joint2)} dummy joints and {len(self.joint)} active joints")
+        
+        # Create mapping from leg index to joint indices
+        for leg_idx in range(self.leg_count):
+            # Each leg has 3 joints
+            start_idx = leg_idx * 3
+            self.leg_joints[leg_idx] = [
+                self.joint[start_idx],
+                self.joint[start_idx + 1], 
+                self.joint[start_idx + 2]
+            ]
     
-    def reset_posture(self):
-        """Reset the robot to its initial posture."""
+    def _configure_robot_dynamics(self):
+        """Configure robot dynamics to reduce vibrations."""
+        # Configure base dynamics
+        p.changeDynamics(
+            self.body_id, -1,  # Base link
+            lateralFriction=0.8,        # Reduced for more realistic movement
+            spinningFriction=0.03,      # Increased to reduce spinning
+            rollingFriction=0.005,      # Increased slightly
+            restitution=0.02,           # Further reduced bouncing
+            contactDamping=120.0,       # Increased damping
+            contactStiffness=5000.0,    # Increased stiffness
+            linearDamping=0.25,         # Increased for stability
+            angularDamping=0.35         # Significantly increased to prevent spinning
+        )
+        
+        # Configure joint dynamics
+        for joint_idx in range(self.num_joints):
+            joint_info = p.getJointInfo(self.body_id, joint_idx)
+            joint_type = joint_info[2]
+            
+            if joint_type == p.JOINT_REVOLUTE:
+                p.changeDynamics(
+                    self.body_id, joint_idx,
+                    lateralFriction=0.8,
+                    spinningFriction=0.03,
+                    rollingFriction=0.005,
+                    restitution=0.02,
+                    contactDamping=120.0,
+                    contactStiffness=5000.0,
+                    jointDamping=0.15,        # Increased joint damping
+                    linearDamping=0.25,
+                    angularDamping=0.35
+                )
+        
+        # Disable default motor control for all active joints
+        for joint_idx in self.joint:
+            p.setJointMotorControl2(
+                bodyUniqueId=self.body_id,
+                jointIndex=joint_idx,
+                controlMode=p.VELOCITY_CONTROL,
+                force=0  # Disable default motors
+            )
+    
+    def reset_posture(self, smooth=True):
+        """Reset robot to initial posture with option for smooth transition."""
+        # Set initial target angles
         for i in range(self.leg_count):
             for j in range(self.dof):
                 if i < 3:  # Right side legs
-                    self.t_angle[i][j] = -math.radians(self.q_init[j])
+                    self.tang[i][j] = -np.radians(self.q_init[j])
                 else:      # Left side legs
-                    self.t_angle[i][j] = math.radians(self.q_init[j])
+                    self.tang[i][j] = np.radians(self.q_init[j])
         
-        self.apply_target_angles()
+        if smooth:
+            # Smooth transition using motor control
+            self._apply_smooth_position_control()
+        else:
+            # Instant reset (only for true initialization)
+            self._apply_position_control_direct()
     
     def apply_target_angles(self):
-        """Apply the current target angles to the robot joints."""
-        gain = 5.0  # Control gain
+        """
+        Apply target angles using enhanced POSITION_CONTROL with PD gains.
+        This replaces the vibration-prone VELOCITY_CONTROL approach.
+        """
+        # Update current angles
+        for i in range(self.leg_count):
+            for j in range(self.dof):
+                joint_idx = self.leg_joints[i][j]
+                joint_state = p.getJointState(self.body_id, joint_idx)
+                self.qang[i][j] = joint_state[0]
         
-        # Apply to each leg
-        for leg_group in range(self.leg_count):
-            if leg_group in self.leg_joints:
-                joints = self.leg_joints[leg_group]
+        # Apply POSITION_CONTROL with proper PD gains
+        target_positions = []
+        joint_indices = []
+        forces = []
+        position_gains = []
+        velocity_gains = []
+        
+        for i in range(self.leg_count):
+            for j in range(self.dof):
+                joint_idx = self.leg_joints[i][j]
+                target_angle = self.tang[i][j] * self.posz
                 
-                # Apply to each joint in this leg
-                for j, joint_index in enumerate(joints):
-                    if j < self.dof:
-                        # Get current joint angle
-                        joint_state = p.getJointState(self.robot_id, joint_index)
-                        current_angle = joint_state[0]
-                        self.q_angle[leg_group][j] = current_angle
-                        
-                        # Calculate velocity based on error
-                        target_angle = self.t_angle[leg_group][j]
-                        velocity = gain * (target_angle - current_angle)
-                        
-                        # Apply velocity to joint
-                        p.setJointMotorControl2(
-                            bodyUniqueId=self.robot_id,
-                            jointIndex=joint_index,
-                            controlMode=p.VELOCITY_CONTROL,
-                            targetVelocity=velocity,
-                            force=20.0
-                        )
+                joint_indices.append(joint_idx)
+                target_positions.append(target_angle)
+                forces.append(self.max_force)
+                position_gains.append(self.kp)
+                velocity_gains.append(self.kd)
+        
+        # Apply motor control using vectorized approach
+        p.setJointMotorControlArray(
+            bodyUniqueId=self.body_id,
+            jointIndices=joint_indices,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=target_positions,
+            forces=forces,
+            positionGains=position_gains,
+            velocityGains=velocity_gains
+        )
+    
+    def _apply_position_control_direct(self):
+        """Apply position control for immediate positioning (used in reset)."""
+        for i in range(self.leg_count):
+            for j in range(self.dof):
+                joint_idx = self.leg_joints[i][j]
+                target_angle = self.tang[i][j] * self.posz
+                
+                # Reset joint to target position
+                p.resetJointState(self.body_id, joint_idx, target_angle)
+    
+    def _apply_smooth_position_control(self):
+        """Apply position control for smooth transitions."""
+        # Use reduced gains for smooth movement
+        target_positions = []
+        joint_indices = []
+        forces = []
+        position_gains = []
+        velocity_gains = []
+        
+        for i in range(self.leg_count):
+            for j in range(self.dof):
+                joint_idx = self.leg_joints[i][j]
+                target_angle = self.tang[i][j] * self.posz
+                
+                joint_indices.append(joint_idx)
+                target_positions.append(target_angle)
+                forces.append(self.max_force * 0.5)  # Reduced force for smooth movement
+                position_gains.append(self.kp * 0.3)  # Reduced gain
+                velocity_gains.append(self.kd * 2.0)  # Increased damping
+        
+        # Apply smooth motor control
+        p.setJointMotorControlArray(
+            bodyUniqueId=self.body_id,
+            jointIndices=joint_indices,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=target_positions,
+            forces=forces,
+            positionGains=position_gains,
+            velocityGains=velocity_gains
+        )
     
     def set_target_angles(self, angles):
         """
         Set target angles for all joints.
         
         Args:
-            angles: Array of shape (leg_count, dof) with target angles
+            angles: Array of shape (leg_count, dof) with target angles in radians
         """
-        self.t_angle = np.array(angles)
+        if angles.shape != (self.leg_count, self.dof):
+            # Handle flattened input
+            if len(angles.flatten()) == self.leg_count * self.dof:
+                angles = angles.reshape(self.leg_count, self.dof)
+            else:
+                raise ValueError(f"Expected angles shape {(self.leg_count, self.dof)}, got {angles.shape}")
+        
+        self.tang = angles.copy()
+    
+    def update_orientation(self):
+        """Update posz based on robot orientation (upright vs flipped)."""
+        try:
+            _, orn = p.getBasePositionAndOrientation(self.body_id)
+            rot_matrix = np.array(p.getMatrixFromQuaternion(orn)).reshape(3, 3)
+            
+            # Check if robot is upside down
+            if rot_matrix[2, 2] < -0.7:  # z-component of z-axis
+                self.posz = -1
+            else:
+                self.posz = 1
+        except:
+            # Handle case where robot might be removed
+            self.posz = 1
     
     def get_position(self):
-        """Get current position of the robot body."""
-        pos, _ = p.getBasePositionAndOrientation(self.robot_id)
-        return pos
+        """Get current position of robot body."""
+        try:
+            pos, _ = p.getBasePositionAndOrientation(self.body_id)
+            return pos
+        except:
+            return [0, 0, 0]
     
     def get_orientation(self):
-        """Get current orientation of the robot body."""
-        _, orn = p.getBasePositionAndOrientation(self.robot_id)
-        return orn
+        """Get current orientation of robot body."""
+        try:
+            _, orn = p.getBasePositionAndOrientation(self.body_id)
+            return orn
+        except:
+            return [0, 0, 0, 1]
     
     def get_state(self):
-        """Get complete state of the robot (position, orientation, joint angles)."""
-        pos, orn = p.getBasePositionAndOrientation(self.robot_id)
-        rot_matrix = p.getMatrixFromQuaternion(orn)
-        
-        state = {
-            'position': pos,
-            'orientation': orn,
-            'rotation_matrix': rot_matrix,
-            'joint_angles': self.q_angle.copy()
-        }
-        return state
+        """Get complete state of the robot."""
+        try:
+            pos, orn = p.getBasePositionAndOrientation(self.body_id)
+            rot_matrix = p.getMatrixFromQuaternion(orn)
+            
+            # Get leg positions for all active leg end segments
+            leg_positions = []
+            for i in range(self.leg_count):
+                # Get position of the last segment of each leg
+                last_joint_idx = self.leg_joints[i][2]
+                link_state = p.getLinkState(self.body_id, last_joint_idx)
+                leg_positions.append(link_state[0])  # World position
+            
+            state = {
+                'position': pos,
+                'orientation': orn,
+                'rotation_matrix': rot_matrix,
+                'joint_angles': self.qang.copy(),
+                'leg_positions': leg_positions
+            }
+            return state
+        except:
+            # Return default state if robot is not available
+            return {
+                'position': [0, 0, 0],
+                'orientation': [0, 0, 0, 1],
+                'rotation_matrix': [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                'joint_angles': np.zeros((self.leg_count, self.dof)),
+                'leg_positions': [[0, 0, 0]] * self.leg_count
+            }
     
-    @property
-    def body_id(self):
-        """Return the robot ID for compatibility."""
-        return self.robot_id
+    def set_motor_gains(self, kp=None, kd=None, max_force=None):
+        """
+        Set motor control gains for fine-tuning.
+        
+        Args:
+            kp: Position gain
+            kd: Velocity gain  
+            max_force: Maximum motor force
+        """
+        if kp is not None:
+            self.kp = kp
+        if kd is not None:
+            self.kd = kd
+        if max_force is not None:
+            self.max_force = max_force
+        
+        print(f"Motor gains updated: kp={self.kp}, kd={self.kd}, max_force={self.max_force}")
+    
+    def check_stability(self):
+        """
+        Enhanced stability checking with more lenient thresholds.
+        
+        Returns:
+            Dictionary with stability information
+        """
+        try:
+            pos, orn = p.getBasePositionAndOrientation(self.body_id)
+            rot_matrix = np.array(p.getMatrixFromQuaternion(orn)).reshape(3, 3)
+            
+            # Vertical orientation (z-component of z-axis)
+            vertical_stability = rot_matrix[2, 2]
+            
+            # Height above ground
+            height = pos[2]
+            
+            # Angular velocity
+            linear_vel, angular_vel = p.getBaseVelocity(self.body_id)
+            angular_speed = np.linalg.norm(angular_vel)
+            
+            return {
+                'vertical_stability': vertical_stability,
+                'height': height,
+                'angular_speed': angular_speed,
+                'is_stable': vertical_stability > 0.4 and angular_speed < 4.0  # More lenient thresholds
+            }
+        except:
+            return {
+                'vertical_stability': 0.0,
+                'height': 0.0,
+                'angular_speed': 10.0,
+                'is_stable': False
+            }
+            
+    def _tune_inertia(self):
+        """Tune inertia properties for stability."""
+        # Increase base inertia for stability
+        base_inertia = [0.01, 0.01, 0.01]  # Diagonal inertia
+        p.changeDynamics(
+            self.body_id, -1,  # Base link
+            localInertiaDiagonal=base_inertia
+        )
+        
+        # Optionally reduce leg segment inertia
+        for joint_idx in self.joint:
+            p.changeDynamics(
+                self.body_id, joint_idx,
+                localInertiaDiagonal=[0.0001, 0.0001, 0.0001]
+            )

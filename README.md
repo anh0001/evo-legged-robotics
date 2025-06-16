@@ -57,6 +57,54 @@ pip install -e .
 - Pandas
 - Matplotlib
 
+## Testing
+
+This section provides step-by-step instructions to validate your installation and run quick tests to ensure the framework is working correctly.
+
+### Step 1: Framework Validation
+
+First, validate that all dependencies and core components are properly installed:
+
+```bash
+chmod +x scripts/validate_framework.py
+```
+
+```bash
+python scripts/validate_framework.py
+```
+
+This script checks your Python environment, verifies all required packages are installed, and validates the core framework components.
+
+### Step 2: Quick Test Runs
+
+#### Test Enhanced VEGA Algorithm
+Run the enhanced Virus Evolutionary Genetic Algorithm (VEGA) with minimal settings to verify the evolutionary core is working:
+
+```bash
+python experiments/core/run_evolution.py --quick-test --max-iterations=100 --real-time
+```
+
+#### Test Ablation Study Framework
+Test the ablation framework with minimal configurations (recommended for first-time users):
+
+```bash
+python experiments/studies/ablation_study.py --configs=minimal --runs=3
+```
+
+For a comprehensive ablation study (takes longer but tests all configurations):
+
+```bash
+python experiments/studies/ablation_study.py --full-study
+python experiments/studies/ablation_study.py --config=experiments/configs/ablation_configs.yaml --runs=50
+```
+
+#### Test Visualization System
+Then test with real experimental data:
+
+```bash
+python experiments/visualization/publication_plots_runner.py
+```
+
 ## Usage Example
 
 ```bash
@@ -111,73 +159,6 @@ Training data and visualizations are stored in the `logs/neuro_adaptive_terrain`
 - **CSV files**: Training data saved for external analysis  
 - **PNG plots**: Generated visualizations of training progress  
 - **Log files**: Detailed execution logs  
-
-## Quick Start
-
-```python
-from evo_legged_robotics.simulation import Environment
-from evo_legged_robotics.robot import LeggedRobot
-from evo_legged_robotics.controllers import NeuroAdaptiveTerrainController
-
-# Create simulation environment
-env = Environment(render=True, terrain_type="obstacles")
-
-# Initialize robot with default parameters
-robot = LeggedRobot()
-env.add_robot(robot)
-
-# Create controller
-controller = NeuroAdaptiveTerrainController()
-
-# Run simulation
-for i in range(1000):
-    # Get current state with leg positions
-    state = get_extended_state(robot)
-    
-    # Get actions from controller
-    actions = controller.get_actions(state)
-    
-    # Apply to robot and step simulation
-    robot.set_target_angles(actions)
-    robot.apply_target_angles()
-    env.step()
-    
-    # Learn from experience when orientation improves
-    controller.learn(state)
-```
-
-## Evolution Training
-
-Train a new controller using evolutionary algorithms:
-
-```python
-from evo_legged_robotics.evolution import VEGA
-from evo_legged_robotics.simulation import TrainingEnvironment
-from evo_legged_robotics.robot import LeggedRobot
-
-# Create training environment
-env = TrainingEnvironment(terrain_type="flat")
-
-# Initialize robot
-robot = LeggedRobot()
-
-# Initialize evolutionary algorithm
-vega = VEGA(
-    population_size=30,
-    chromosome_length=10,
-    generations=500,
-    fitness_objectives=["forward_speed", "energy_efficiency", "stability"]
-)
-
-# Train controller (this will take time)
-best_controller = vega.train(robot, env, parallel=True)
-
-# Save trained controller
-best_controller.save('models/my_controller.pkl')
-
-# Visualize fitness progress
-vega.plot_fitness_history()
-```
 
 ## Project Structure
 
