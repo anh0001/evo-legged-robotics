@@ -48,8 +48,10 @@ class VEGA:
         self.fitness = np.zeros((self.gan, 6))  # Increased from 3 to 6 objectives
         self.fitv = np.zeros((self.gav, 6))
         
-        # For VEGA ranking 
-        self.gac = np.full(self.gan, -1)
+        # Pareto ranking results
+        self.parents = []
+        self.pareto_front = []
+        self.pareto_archive = []
         
         # Enhanced fitness tracking
         self.iterations = generations
@@ -465,35 +467,29 @@ class VEGA:
         self.logger.info("Virus population mutated")
     
     def rank(self):
-        """Enhanced ranking for multi-objective optimization."""
-        # Reset categories
-        self.gac = np.full(self.gan, -1)
-        
-        # Assign individuals to objective categories (now 6 objectives)
-        for j in range(self.gan):
-            h = j % 6  # Cycle through 6 objectives instead of 3
-            
-            # Find first unassigned individual
-            k = 0
-            while self.gac[k] != -1:
-                k += 1
-            
-            # Find best unassigned individual for this objective
-            for i in range(k+1, self.gan):
-                if self.gac[i] == -1 and self.fitness[i, h] > self.fitness[k, h]:
-                    k = i
-            
-            self.gac[k] = h
-        
-        # Log enhanced rankings
-        rank_str = "\nEnhanced Rankings (6 objectives):\n"
-        obj_names = ["Forward", "Stability", "Energy", "Smoothness", "Direction", "Contact"]
-        for i in range(self.gan):
-            h = self.gac[i]
-            if h >= 0 and h < len(obj_names):
-                rank_str += f"r[{i}]:{obj_names[h]}, {self.fitness[i, h]:.2f}\n"
-        
-        self.logger.info(rank_str)
+        """Rank population using non-dominated sorting and crowding distance."""
+        from .pareto import non_dominated_sort, crowding_distance
+
+        # Compute Pareto fronts
+        self.fronts = non_dominated_sort(self.fitness)
+        self.pareto_front = self.fronts[0] if self.fronts else []
+
+        # Compute crowding distance for the first front
+        distances = crowding_distance(self.fitness, self.pareto_front)
+
+        # Sort individuals in the first front by crowding distance
+        self.parents = sorted(self.pareto_front, key=lambda i: distances.get(i, 0), reverse=True)
+
+        # Update external archive of Pareto-optimal individuals
+        for idx in self.pareto_front:
+            individual = {
+                'length': int(self.host_lengths[idx]),
+                'sequence': self.hosts[idx, :self.host_lengths[idx]].copy(),
+                'fitness': self.fitness[idx].copy(),
+            }
+            self.pareto_archive.append(individual)
+
+        self.logger.info(f"Pareto front size: {len(self.pareto_front)}")
     
     def evolve(self):
         """Enhanced evolution with better stability focus."""
@@ -501,89 +497,66 @@ class VEGA:
         self.mutate_viruses()
         self.infect_hosts()
         self.rank()
-        
-        # Focus on stability-related objectives more often
-        if self.iteration % 6 in [1, 3]:  # Focus on stability 2/6 times
-            h = 1  # Stability objective
-        else:
-            h = self.iteration % 6
-            
-        obj_names = ["Forward", "Stability", "Energy", "Smoothness", "Direction", "Contact"]
-        
-        # Find worst and best individuals for this objective
-        g1 = 0  # Worst
-        while self.gac[g1] != h:
-            g1 += 1
-        g2 = g1  # Best
-        
-        for i in range(g1+1, self.gan):
-            if self.gac[i] == h:
-                if self.fitness[i, h] < self.fitness[g1, h]:
-                    g1 = i
-                elif self.fitness[i, h] > self.fitness[g2, h]:
-                    g2 = i
-        
-        self.logger.info(f"Evolving for {obj_names[h]} objective")
-        
-        # Apply evolution with enhanced mutation rates for stability
-        g3 = int(self.gan * np.random.random())
-        # FIXED: Reduced crossover rate for stability
-        r = np.random.random() * 0.3  # Reduced from 0.4
-        
-        # Copy sequence length
-        self.host_lengths[g1] = self.host_lengths[g2]
+
+        if len(self.parents) < 1:
+            return
+
+        parent1 = self.parents[0]
+        donor = int(self.gan * np.random.random())
+        target = int(np.argmin(np.sum(self.fitness, axis=1)))
+
+        # Apply evolution using Pareto parents
+        r = np.random.random() * 0.3
+
+        self.host_lengths[target] = self.host_lengths[parent1]
         
         # FIXED: Enhanced mutation with stability focus
-        for m in range(self.host_lengths[g1]):
+        for m in range(self.host_lengths[target]):
             for i in range(2):
                 for j in range(self.dof):
-                    if (np.random.random() < r) and (m < self.host_lengths[g3]):
-                        # FIXED: Much smaller mutations for stability
-                        mutation_factor = 0.05 if h == 1 else 0.1  # Halved mutation rates
-                        self.hosts[g1, m, i, j] = (
-                            self.hosts[g3, m, i, j] + 
-                            self.randn() * self.q_range[j] * mutation_factor
+                    if (np.random.random() < r) and (m < self.host_lengths[donor]):
+                        self.hosts[target, m, i, j] = (
+                            self.hosts[donor, m, i, j] +
+                            self.randn() * self.q_range[j] * 0.1
                         )
                     else:
-                        mutation_factor = 0.02 if h == 1 else 0.05  # Even smaller for best individual
-                        self.hosts[g1, m, i, j] = (
-                            self.hosts[g2, m, i, j] + 
-                            self.randn() * self.q_range[j] * mutation_factor
+                        self.hosts[target, m, i, j] = (
+                            self.hosts[parent1, m, i, j] +
+                            self.randn() * self.q_range[j] * 0.05
                         )
-                    
-                    # Enforce bounds with safety margin
-                    self.hosts[g1, m, i, j] = np.clip(
-                        self.hosts[g1, m, i, j],
-                        self.q_min[j] + 0.1,  # Safety margin
+
+                    self.hosts[target, m, i, j] = np.clip(
+                        self.hosts[target, m, i, j],
+                        self.q_min[j] + 0.1,
                         self.q_min[j] + self.q_range[j] - 0.1
                     )
         
         # FIXED: Reduced structural mutation probabilities  
-        mutation_prob = 0.05 if h == 1 else 0.08  # Halved from 0.1/0.15
+        mutation_prob = 0.08
         
         # Insertion mutation
-        if (self.host_lengths[g1] < self.gal - 1 and np.random.random() < mutation_prob):
+        if (self.host_lengths[target] < self.gal - 1 and np.random.random() < mutation_prob):
             self.logger.info("-- insertion mutation --")
-            self._apply_insertion_mutation(g1)
+            self._apply_insertion_mutation(target)
         
         # Deletion mutation  
-        elif (self.host_lengths[g1] > 2 and np.random.random() < mutation_prob):
+        elif (self.host_lengths[target] > 2 and np.random.random() < mutation_prob):
             self.logger.info("-- deletion mutation --")
-            self._apply_deletion_mutation(g1)
+            self._apply_deletion_mutation(target)
         
         # Phase exchange (reduced probability for stability)
         if np.random.random() < mutation_prob * 0.5:
             self.logger.info("-- phase exchange mutation --")
-            self._apply_phase_exchange_mutation(g1)
+            self._apply_phase_exchange_mutation(target)
         
         # Order exchange
         elif np.random.random() < mutation_prob:
             self.logger.info("-- order exchange mutation --")
-            self._apply_order_exchange_mutation(g1)
+            self._apply_order_exchange_mutation(target)
         
-        self.gai = g1
+        self.gai = target
         self.clear_motion_history()
-        self.logger.info(f"Individual {self.gai} selected for {obj_names[h]}")
+        self.logger.info("Individual %d evolved from Pareto parents", self.gai)
     
     def _apply_insertion_mutation(self, individual):
         """Apply insertion mutation."""
