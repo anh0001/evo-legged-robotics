@@ -80,8 +80,15 @@ This script checks your Python environment, verifies all required packages are i
 #### Test Enhanced VEGA Algorithm
 Run the enhanced Virus Evolutionary Genetic Algorithm (VEGA) with minimal settings to verify the evolutionary core is working:
 
+#### Test with minimal settings
 ```bash
 python experiments/core/run_evolution.py --quick-test --max-iterations=100 --real-time
+```
+
+#### Test with full settings
+```bash
+# For a more comprehensive test with longer iterations
+python experiments/core/run_evolution.py --max-iterations=1000 --real-time
 ```
 
 #### Test Ablation Study Framework
