@@ -186,6 +186,15 @@ Key concepts from the original implementation:
 - Evolutionary adaptation to different terrain types
 - Neural network controllers that learn from simulated experience
 
+## Configuration
+
+Two dictionaries control the evaluation process in `VEGA`:
+
+- **fitness_weights** &ndash; multipliers for each normalized fitness objective.
+- **penalty_factors** &ndash; coefficients used by multiplicative penalties. All
+  factors stay in `[0,1)` so penalties scale fitness smoothly without nullifying
+  it.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

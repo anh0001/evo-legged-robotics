@@ -73,6 +73,21 @@ class VEGA:
             'direction_control': 1.5,
             'foot_contact': 2.0
         }
+
+        # Penalty factors for stability and angular velocity (values in [0,1))
+        self.penalty_factors = {
+            'stability_high': 0.5,
+            'stability_low': 0.2,
+            'angular_high': 0.6,
+            'angular_low': 0.3,
+            # Scaling of penalties per fitness objective
+            'forward_weight': 0.3,
+            'stability_weight': 1.0,
+            'energy_weight': 0.2,
+            'smoothness_weight': 0.2,
+            'direction_weight': 0.2,
+            'contact_weight': 0.1
+        }
         
         # Current individual and sequence indices
         self.gai = 0
@@ -125,6 +140,7 @@ class VEGA:
             'virus_population': self.gav,
             'chromosome_length': self.gal,
             'fitness_weights': self.fitness_weights,
+            'penalty_factors': self.penalty_factors,
             'q_min': self.q_min.tolist(),
             'q_range': self.q_range.tolist(),
             'q_init': self.q_init.tolist(),
@@ -270,28 +286,34 @@ class VEGA:
             normalized_fitness[5] * self.fitness_weights['foot_contact']
         ]
 
-        # FIXED: Additive penalties instead of multiplicative
-        stability_penalty = 0
+        # Multiplicative penalties to scale fitness components
+        stability_penalty = 0.0
         if stability_metrics['vertical_stability'] < 0.3:
-            stability_penalty = 2.0  # Subtract penalty
+            stability_penalty = self.penalty_factors['stability_high']
         elif stability_metrics['vertical_stability'] < 0.5:
-            stability_penalty = 1.0
-        
-        angular_penalty = 0
+            stability_penalty = self.penalty_factors['stability_low']
+
+        angular_penalty = 0.0
         if stability_metrics['angular_speed'] > 6.0:
-            angular_penalty = 3.0
+            angular_penalty = self.penalty_factors['angular_high']
         elif stability_metrics['angular_speed'] > 4.0:
-            angular_penalty = 1.5
-        
-        # Apply penalties by subtraction (keeps gradients)
+            angular_penalty = self.penalty_factors['angular_low']
+
         final_fitness = [
-            max(0, weighted_fitness[0] - stability_penalty * 0.3),  # Forward
-            max(0, weighted_fitness[1] - stability_penalty),        # Stability  
-            max(0, weighted_fitness[2] - angular_penalty * 0.2),    # Energy
-            max(0, weighted_fitness[3] - angular_penalty * 0.2),    # Smoothness
-            max(0, weighted_fitness[4] - stability_penalty * 0.2),  # Direction
-            max(0, weighted_fitness[5] - stability_penalty * 0.1)   # Contact
+            weighted_fitness[0]
+            * (1 - stability_penalty * self.penalty_factors['forward_weight']),
+            weighted_fitness[1]
+            * (1 - stability_penalty * self.penalty_factors['stability_weight']),
+            weighted_fitness[2]
+            * (1 - angular_penalty * self.penalty_factors['energy_weight']),
+            weighted_fitness[3]
+            * (1 - angular_penalty * self.penalty_factors['smoothness_weight']),
+            weighted_fitness[4]
+            * (1 - stability_penalty * self.penalty_factors['direction_weight']),
+            weighted_fitness[5]
+            * (1 - stability_penalty * self.penalty_factors['contact_weight']),
         ]
+        final_fitness = [max(0, f) for f in final_fitness]
         
         self.fitness[self.gai] = final_fitness
 
