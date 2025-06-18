@@ -287,6 +287,7 @@ class EnhancedVEGA(VEGA):
         
         # Update length
         self.host_lengths[individual_idx] += 1
+        self.clamp_chromosome_length(individual_idx)
         
         self.logger.debug(f"Insertion mutation: {current_length} -> {self.host_lengths[individual_idx]}")
         return True
@@ -315,6 +316,7 @@ class EnhancedVEGA(VEGA):
         
         # Update length
         self.host_lengths[individual_idx] -= 1
+        self.clamp_chromosome_length(individual_idx)
         
         self.logger.debug(f"Deletion mutation: {current_length} -> {self.host_lengths[individual_idx]}")
         return True
@@ -343,6 +345,7 @@ class EnhancedVEGA(VEGA):
             self.hosts[individual_idx, position, 1, dof] = temp
         
         self.logger.debug(f"Phase exchange mutation at position {position}")
+        self.clamp_chromosome_length(individual_idx)
         return True
     
     def _apply_order_exchange_mutation(self, individual_idx):
@@ -373,6 +376,7 @@ class EnhancedVEGA(VEGA):
                 self.hosts[individual_idx, pos2, phase, dof] = temp
         
         self.logger.debug(f"Order exchange mutation: positions {pos1} <-> {pos2}")
+        self.clamp_chromosome_length(individual_idx)
         return True
     
     def enhanced_fitness_evaluation(self, robot, prev_pos, curr_pos, prev_rot, curr_rot, ground_id):

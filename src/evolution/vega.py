@@ -180,6 +180,7 @@ class VEGA:
         for i in range(self.gan):
             # Random sequence length between 2 and 4
             self.host_lengths[i] = 2 + int(np.random.random() * 3)
+            assert 2 <= self.host_lengths[i] <= self.gal, "Invalid initial chromosome length"
             
             # Initialize each position with better constraints
             for m in range(self.host_lengths[i]):
@@ -203,6 +204,9 @@ class VEGA:
         # Initialize fitness arrays
         self.fitness = np.zeros((self.gan, 6))
         self.fitv = np.zeros((self.gav, 6))
+
+        # Ensure all initial lengths are within valid bounds
+        assert np.all((self.host_lengths >= 2) & (self.host_lengths <= self.gal)), "Host lengths out of bounds"
         
         self.logger.info("Populations initialized with enhanced diversity control")
     
@@ -636,6 +640,9 @@ class VEGA:
             self.chostl[self.iteration] = self.chostl[self.iteration - 1]
 
         self.logger.info("Individual %d evolved from Pareto parents", self.gai)
+
+        # Verify chromosome lengths remain within valid bounds
+        assert np.all((self.host_lengths >= 2) & (self.host_lengths <= self.gal)), "Chromosome length out of bounds"
     
     def _apply_insertion_mutation(self, individual):
         """Apply insertion mutation."""
@@ -656,6 +663,7 @@ class VEGA:
                     self.hosts[individual, k, i, j] = center + (np.random.random() - 0.5) * variation
         
         self.host_lengths[individual] += 1
+        self.clamp_chromosome_length(individual)
     
     def _apply_deletion_mutation(self, individual):
         """Apply deletion mutation.""" 
@@ -668,6 +676,8 @@ class VEGA:
                 for i in range(2):
                     for j in range(self.dof):
                         self.hosts[individual, m, i, j] = self.hosts[individual, m+1, i, j]
+
+        self.clamp_chromosome_length(individual)
     
     def _apply_phase_exchange_mutation(self, individual):
         """Apply phase exchange mutation."""
@@ -678,6 +688,8 @@ class VEGA:
             temp = self.hosts[individual, m, 0, j]
             self.hosts[individual, m, 0, j] = self.hosts[individual, m, 1, j]
             self.hosts[individual, m, 1, j] = temp
+
+        self.clamp_chromosome_length(individual)
     
     def _apply_order_exchange_mutation(self, individual):
         """Apply order exchange mutation."""
@@ -691,6 +703,12 @@ class VEGA:
                     temp = self.hosts[individual, k, i, j]
                     self.hosts[individual, k, i, j] = self.hosts[individual, m, i, j]
                     self.hosts[individual, m, i, j] = temp
+
+        self.clamp_chromosome_length(individual)
+
+    def clamp_chromosome_length(self, individual):
+        """Ensure chromosome length stays within [2, self.gal]."""
+        self.host_lengths[individual] = int(np.clip(self.host_lengths[individual], 2, self.gal))
     
     def reverse(self, n):
         """Reverse motion sequence for backward movement."""
