@@ -14,13 +14,13 @@ class Environment:
     def __init__(
         self,
         render=True,
-        time_step=0.002,
+        time_step=1.0/240.0,
         gravity=-9.81,
         terrain_type="flat",
         real_time=False,
         num_solver_iterations=50,
         enable_cone_friction=True,
-        split_impulse_enabled=False,
+        split_impulse_enabled=True,
         split_impulse_penetration_threshold=-0.02,
         contact_breaking_threshold=0.02,
         restitution_velocity_threshold=0.2,
@@ -33,7 +33,7 @@ class Environment:
         p.setRealTimeSimulation(1 if real_time else 0)
         self.real_time = real_time
         
-        # Use smaller timestep for better stability (recommended: 1/500s)
+        # Use Bullet recommended timestep for stability (1/240s)
         self.time_step = time_step
         p.setTimeStep(time_step)
         p.setGravity(0, 0, gravity)
