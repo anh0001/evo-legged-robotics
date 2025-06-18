@@ -17,7 +17,7 @@ class VEGA:
     comprehensive fitness function to prevent leg vibrations and improve locomotion.
     """
     
-    def __init__(self, population_size=30, chromosome_length=10, generations=500):
+    def __init__(self, population_size=30, chromosome_length=10, generations=500, elite_fraction=0.05):
         """Initialize the enhanced VEGA algorithm."""
         # Setup experiment logging
         self.experiment_id = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -27,8 +27,11 @@ class VEGA:
         
         # Algorithm parameters
         self.gan = population_size    # Host population size
-        self.gav = 20                 # Virus population size  
+        self.gav = 20                 # Virus population size
         self.gal = chromosome_length  # Chromosome length
+        # Elite configuration
+        self.elite_fraction = elite_fraction
+        self.n_elite = max(1, int(self.gan * self.elite_fraction))
         
         # Robot parameters
         self.dof = 3                  # Degree of freedom
@@ -52,6 +55,7 @@ class VEGA:
         self.parents = []
         self.pareto_front = []
         self.pareto_archive = []
+        self.elite_archive = []
         
         # Enhanced fitness tracking
         self.iterations = generations
@@ -498,12 +502,34 @@ class VEGA:
         self.infect_hosts()
         self.rank()
 
+        # Identify elite individuals based on Pareto ranking
+        elite_count = max(1, int(self.gan * self.elite_fraction))
+        elite_indices = self.parents[:elite_count]
+        elite_hosts = self.hosts[elite_indices].copy()
+        elite_lengths = self.host_lengths[elite_indices].copy()
+        elite_fitness = self.fitness[elite_indices].copy()
+
+        # Archive elites for reference
+        self.elite_archive = [
+            {
+                'length': int(self.host_lengths[i]),
+                'sequence': self.hosts[i, :self.host_lengths[i]].copy(),
+                'fitness': self.fitness[i].copy(),
+            }
+            for i in elite_indices
+        ]
+
         if len(self.parents) < 1:
             return
 
         parent1 = self.parents[0]
         donor = int(self.gan * np.random.random())
-        target = int(np.argmin(np.sum(self.fitness, axis=1)))
+
+        non_elites = [i for i in range(self.gan) if i not in elite_indices]
+        if non_elites:
+            target = non_elites[int(np.argmin(np.sum(self.fitness[non_elites], axis=1)))]
+        else:
+            target = int(np.argmin(np.sum(self.fitness, axis=1)))
 
         # Apply evolution using Pareto parents
         r = np.random.random() * 0.3
@@ -556,6 +582,20 @@ class VEGA:
         
         self.gai = target
         self.clear_motion_history()
+
+        # Reinsert elites unchanged
+        for idx, e_idx in enumerate(elite_indices):
+            self.hosts[e_idx] = elite_hosts[idx]
+            self.host_lengths[e_idx] = elite_lengths[idx]
+            self.fitness[e_idx] = elite_fitness[idx]
+
+        # Propagate fitness history so elites persist across iterations
+        if self.iteration > 0 and self.iteration < len(self.bfith):
+            self.bfith[self.iteration] = self.bfith[self.iteration - 1]
+            self.cfith[self.iteration] = self.cfith[self.iteration - 1]
+            self.bhostl[self.iteration] = self.bhostl[self.iteration - 1]
+            self.chostl[self.iteration] = self.chostl[self.iteration - 1]
+
         self.logger.info("Individual %d evolved from Pareto parents", self.gai)
     
     def _apply_insertion_mutation(self, individual):
