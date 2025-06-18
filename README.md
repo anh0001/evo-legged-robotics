@@ -194,6 +194,8 @@ Two dictionaries control the evaluation process in `VEGA`:
 - **penalty_factors** &ndash; coefficients used by multiplicative penalties. All
   factors stay in `[0,1)` so penalties scale fitness smoothly without nullifying
   it.
+- **evolution_parameters** &ndash; values such as `crossover_rate` and
+  `mutation_prob` that control how aggressively VEGA explores.
 
 ## License
 

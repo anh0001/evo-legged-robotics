@@ -17,7 +17,10 @@ class VEGA:
     comprehensive fitness function to prevent leg vibrations and improve locomotion.
     """
     
-    def __init__(self, population_size=30, chromosome_length=10, generations=500, elite_fraction=0.05):
+    def __init__(self, population_size=30, chromosome_length=10, generations=500,
+                 elite_fraction=0.05, crossover_rate=0.8, mutation_prob=0.18,
+                 mutation_factor_donor=0.3, mutation_factor_parent=0.2,
+                 infection_factor=0.2, virus_mutation_factor=0.2):
         """Initialize the enhanced VEGA algorithm."""
         # Setup experiment logging
         self.experiment_id = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -32,6 +35,14 @@ class VEGA:
         # Elite configuration
         self.elite_fraction = elite_fraction
         self.n_elite = max(1, int(self.gan * self.elite_fraction))
+
+        # Tunable evolutionary parameters
+        self.crossover_rate = crossover_rate
+        self.mutation_prob = mutation_prob
+        self.mutation_factor_donor = mutation_factor_donor
+        self.mutation_factor_parent = mutation_factor_parent
+        self.infection_factor = infection_factor
+        self.virus_mutation_factor = virus_mutation_factor
         
         # Robot parameters
         self.dof = 3                  # Degree of freedom
@@ -144,6 +155,12 @@ class VEGA:
             'q_min': self.q_min.tolist(),
             'q_range': self.q_range.tolist(),
             'q_init': self.q_init.tolist(),
+            'crossover_rate': self.crossover_rate,
+            'mutation_prob': self.mutation_prob,
+            'mutation_factor_donor': self.mutation_factor_donor,
+            'mutation_factor_parent': self.mutation_factor_parent,
+            'infection_factor': self.infection_factor,
+            'virus_mutation_factor': self.virus_mutation_factor,
             'experiment_id': self.experiment_id,
             'timestamp': time.time(),
             'date': datetime.now().isoformat()
@@ -468,7 +485,7 @@ class VEGA:
                     for j in range(self.dof):
                         perturb = (
                             self.virus[virus_idx, j] +
-                            self.randn() * self.q_range[j] * 0.02
+                            self.randn() * self.q_range[j] * self.infection_factor
                         )
                         self.hosts[host_idx, m, phase, j] += perturb
                         self.hosts[host_idx, m, phase, j] = np.clip(
@@ -484,7 +501,7 @@ class VEGA:
         for v in range(self.gav):
             for j in range(self.dof):
                 if np.random.random() < 0.3:
-                    self.virus[v, j] += self.randn() * self.q_range[j] * 0.05
+                    self.virus[v, j] += self.randn() * self.q_range[j] * self.virus_mutation_factor
                     self.virus[v, j] = np.clip(
                         self.virus[v, j],
                         -self.q_range[j],
@@ -554,7 +571,7 @@ class VEGA:
             target = int(np.argmin(np.sum(self.fitness, axis=1)))
 
         # Apply evolution using Pareto parents
-        r = np.random.random() * 0.3
+        r = np.random.random() * self.crossover_rate
 
         self.host_lengths[target] = self.host_lengths[parent1]
         
@@ -565,12 +582,12 @@ class VEGA:
                     if (np.random.random() < r) and (m < self.host_lengths[donor]):
                         self.hosts[target, m, i, j] = (
                             self.hosts[donor, m, i, j] +
-                            self.randn() * self.q_range[j] * 0.1
+                            self.randn() * self.q_range[j] * self.mutation_factor_donor
                         )
                     else:
                         self.hosts[target, m, i, j] = (
                             self.hosts[parent1, m, i, j] +
-                            self.randn() * self.q_range[j] * 0.05
+                            self.randn() * self.q_range[j] * self.mutation_factor_parent
                         )
 
                     self.hosts[target, m, i, j] = np.clip(
@@ -580,7 +597,7 @@ class VEGA:
                     )
         
         # FIXED: Reduced structural mutation probabilities  
-        mutation_prob = 0.08
+        mutation_prob = self.mutation_prob
         
         # Insertion mutation
         if (self.host_lengths[target] < self.gal - 1 and np.random.random() < mutation_prob):
