@@ -430,6 +430,39 @@ class VEGA:
 
         # Already normalized to [0, 1]
         return contacts / robot.leg_count
+
+    def infect_hosts(self):
+        """Apply viruses to each host chromosome."""
+        for host_idx in range(self.gan):
+            virus_idx = int(np.random.random() * self.gav)
+            for m in range(self.host_lengths[host_idx]):
+                for phase in range(2):
+                    for j in range(self.dof):
+                        perturb = (
+                            self.virus[virus_idx, j] +
+                            self.randn() * self.q_range[j] * 0.02
+                        )
+                        self.hosts[host_idx, m, phase, j] += perturb
+                        self.hosts[host_idx, m, phase, j] = np.clip(
+                            self.hosts[host_idx, m, phase, j],
+                            self.q_min[j],
+                            self.q_min[j] + self.q_range[j]
+                        )
+            self.logger.info(
+                f"Host {host_idx} infected by virus {virus_idx}")
+
+    def mutate_viruses(self):
+        """Evolve virus population by small random changes."""
+        for v in range(self.gav):
+            for j in range(self.dof):
+                if np.random.random() < 0.3:
+                    self.virus[v, j] += self.randn() * self.q_range[j] * 0.05
+                    self.virus[v, j] = np.clip(
+                        self.virus[v, j],
+                        -self.q_range[j],
+                        self.q_range[j]
+                    )
+        self.logger.info("Virus population mutated")
     
     def rank(self):
         """Enhanced ranking for multi-objective optimization."""
@@ -464,6 +497,9 @@ class VEGA:
     
     def evolve(self):
         """Enhanced evolution with better stability focus."""
+        # Viruses mutate and infect hosts before ranking
+        self.mutate_viruses()
+        self.infect_hosts()
         self.rank()
         
         # Focus on stability-related objectives more often
