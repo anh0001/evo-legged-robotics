@@ -31,13 +31,13 @@ fi
 
 # Remove temporary files
 echo "  Removing temporary files..."
-find . -name "*.png" -not -path "./docs/*" -delete
-find . -name "*.pdf" -not -path "./docs/*" -delete
-find . -name "*.csv" -not -path "./docs/*" -delete
-find . -name "*.json" -not -path "./docs/*" -not -name "requirements.txt" -not -name "package.json" -not -name "manifest.json" -delete
-find . -name "*_history.png" -delete
-find . -name "stability_history.png" -delete
-find . -name "training_data_distribution.png" -delete
+find . -not -path "./bullet3/*" -name "*.png" -not -path "./docs/*" -delete
+find . -not -path "./bullet3/*" -name "*.pdf" -not -path "./docs/*" -delete
+find . -not -path "./bullet3/*" -name "*.csv" -not -path "./docs/*" -delete
+find . -not -path "./bullet3/*" -name "*.json" -not -path "./docs/*" -not -name "requirements.txt" -not -name "package.json" -not -name "manifest.json" -delete
+find . -not -path "./bullet3/*" -name "*_history.png" -delete
+find . -not -path "./bullet3/*" -name "stability_history.png" -delete
+find . -not -path "./bullet3/*" -name "training_data_distribution.png" -delete
 
 # Remove Python cache files
 find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null
