@@ -10,6 +10,8 @@ from datetime import datetime
 import pandas as pd
 import pybullet as p
 
+from .pareto import crowding_distance
+
 
 class VEGA:
     """
@@ -582,7 +584,12 @@ class VEGA:
         if len(self.parents) < 1:
             return
 
-        parent1 = self.parents[0]
+        # Tournament selection among Pareto front based on crowding distance
+        distances = crowding_distance(self.fitness, self.parents)
+        tournament_size = min(3, len(self.parents))
+        candidates = np.random.choice(self.parents, size=tournament_size, replace=False)
+        parent1 = max(candidates, key=lambda idx: distances.get(idx, 0))
+
         donor = int(self.gan * np.random.random())
 
         non_elites = [i for i in range(self.gan) if i not in elite_indices]
