@@ -28,6 +28,7 @@ The robot model features a main body with multiple articulated legs, each with m
 - Visualization tools for analyzing robot motion and evolution progress
 - TensorBoard integration for neural network training analysis
 - Comprehensive logging and data collection
+- Continuity penalty that discourages abrupt jumps when a gait cycle repeats
 
 ## Installation
 
