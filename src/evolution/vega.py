@@ -280,6 +280,9 @@ class VEGA:
         smoothness_fitness = self._calculate_normalized_smoothness_fitness(
             robot, robot_state, displacement
         )
+        closure_penalty = self._cycle_closure_penalty(self.gai)
+        smoothness_fitness *= math.exp(-closure_penalty * 2.0)
+        smoothness_fitness = float(np.clip(smoothness_fitness, 0, 1))
         
         # 5. Direction Control (normalized to [0, 1])
         direction_fitness = math.exp(-direction_error**2)  # Already in [0,1]
@@ -479,6 +482,20 @@ class VEGA:
 
         # Already normalized to [0, 1]
         return contacts / robot.leg_count
+
+    def _cycle_closure_penalty(self, idx):
+        """Penalty for discontinuity between first and last poses."""
+        length = int(self.host_lengths[idx])
+        if length < 2:
+            return 0.0
+
+        start_pose = self.hosts[idx, 0]
+        end_pose = self.hosts[idx, length - 1]
+
+        diff = np.abs(end_pose - start_pose)
+        norm_diff = diff / self.q_range
+        penalty = float(np.mean(norm_diff))
+        return np.clip(penalty, 0.0, 1.0)
 
     def infect_hosts(self):
         """Apply viruses to each host chromosome."""
