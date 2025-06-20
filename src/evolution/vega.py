@@ -180,9 +180,8 @@ class VEGA:
         """Initialize populations with better diversity."""
         # Initialize host population
         for i in range(self.gan):
-            # Random sequence length between 2 and 4
-            self.host_lengths[i] = 2 + int(np.random.random() * 3)
-            assert 2 <= self.host_lengths[i] <= self.gal, "Invalid initial chromosome length"
+            # Random sequence length within valid bounds
+            self.host_lengths[i] = np.random.randint(2, self.gal + 1)
             
             # Initialize each position with better constraints
             for m in range(self.host_lengths[i]):
@@ -755,8 +754,10 @@ class VEGA:
                 if j == 0:  # First DOF
                     phase = 0 if i % 2 == 0 else 1
                     angle_deg = self.hosts[self.gai, gaj, phase, j]
-                    # FIXED: Even more conservative range
-                    angle_deg = np.clip(angle_deg, -20, 20)  # Reduced from -30,30
+                    # Updated range to match joint limits (-45 to 45 degrees)
+                    min_angle = self.q_min[0]
+                    max_angle = self.q_min[0] + self.q_range[0]
+                    angle_deg = np.clip(angle_deg, min_angle, max_angle)
                     angles[i, j] = np.radians(angle_deg)
                 else:  # DOF 1 and 2
                     phase = 0 if i % 2 == 0 else 1
@@ -765,11 +766,17 @@ class VEGA:
                     min_angle = self.q_min[j] + 2.0  # Safety margin
                     max_angle = self.q_min[j] + self.q_range[j] - 2.0
                     angle_deg = np.clip(angle_deg, min_angle, max_angle)
-                    
+
                     if i < 3:  # Right side
                         angles[i, j] = -np.radians(angle_deg)
                     else:  # Left side
                         angles[i, j] = np.radians(angle_deg)
+
+        # Ensure generated angles respect joint limits for the first DOF
+        rad_min = np.radians(self.q_min[0])
+        rad_max = np.radians(self.q_min[0] + self.q_range[0])
+        assert np.all((angles[:, 0] >= rad_min) & (angles[:, 0] <= rad_max)), (
+            "Generated target angles exceed allowed limits for DOF0")
         
         return angles
     
