@@ -267,7 +267,7 @@ class VEGA:
         
         # 1. Forward Motion (normalized to [0, 1])
         forward_base = math.exp(-angle_change**2) + distance * 10 + alignment
-        forward_fitness = np.clip(forward_base / 20.0, 0, 1)  # Normalize to [0,1]
+        forward_fitness = np.clip(forward_base / 2.0, 0, 1)
         
         # 2. Stability (normalized to [0, 1])
         stability_fitness = self._calculate_normalized_stability_fitness(
@@ -324,19 +324,17 @@ class VEGA:
         elif stability_metrics['angular_speed'] > 4.0:
             angular_penalty = self.penalty_factors['angular_low']
 
+        # Soft penalties instead of nullifying fitness
+        stability_mult = 0.9 if stability_penalty > 0 else 1.0
+        angular_mult = 0.9 if angular_penalty > 0 else 1.0
+
         final_fitness = [
-            weighted_fitness[0]
-            * (1 - stability_penalty * self.penalty_factors['forward_weight']),
-            weighted_fitness[1]
-            * (1 - stability_penalty * self.penalty_factors['stability_weight']),
-            weighted_fitness[2]
-            * (1 - angular_penalty * self.penalty_factors['energy_weight']),
-            weighted_fitness[3]
-            * (1 - angular_penalty * self.penalty_factors['smoothness_weight']),
-            weighted_fitness[4]
-            * (1 - stability_penalty * self.penalty_factors['direction_weight']),
-            weighted_fitness[5]
-            * (1 - stability_penalty * self.penalty_factors['contact_weight']),
+            weighted_fitness[0] * stability_mult,
+            weighted_fitness[1] * stability_mult,
+            weighted_fitness[2] * angular_mult,
+            weighted_fitness[3] * angular_mult,
+            weighted_fitness[4] * stability_mult,
+            weighted_fitness[5] * stability_mult,
         ]
         final_fitness = [max(0, f) for f in final_fitness]
         

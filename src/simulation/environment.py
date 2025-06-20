@@ -18,15 +18,17 @@ class Environment:
         gravity=-9.81,
         terrain_type="flat",
         real_time=False,
-        num_solver_iterations=50,
+        num_solver_iterations=100,
+        num_sub_steps=2,
         enable_cone_friction=True,
         split_impulse_enabled=True,
         split_impulse_penetration_threshold=-0.02,
         contact_breaking_threshold=0.02,
-        restitution_velocity_threshold=0.2,
-        erp=0.8,
-        contact_erp=0.8,
-        friction_erp=0.8
+        restitution_velocity_threshold=0.05,
+        erp=0.2,
+        contact_erp=0.1,
+        friction_erp=0.8,
+        global_cfm=1e-3
     ):
         """Initialize environment with enhanced physics parameters."""
         self.client = p.connect(p.GUI if render else p.DIRECT)
@@ -42,11 +44,11 @@ class Environment:
         p.setPhysicsEngineParameter(
             fixedTimeStep=time_step,
             numSolverIterations=num_solver_iterations,
-            numSubSteps=1,
+            numSubSteps=num_sub_steps,
             erp=erp,
             contactERP=contact_erp,
             frictionERP=friction_erp,
-            globalCFM=5e-7,
+            globalCFM=global_cfm,
             contactBreakingThreshold=contact_breaking_threshold,
             enableConeFriction=1 if enable_cone_friction else 0,
             useSplitImpulse=1 if split_impulse_enabled else 0,
@@ -70,13 +72,13 @@ class Environment:
         # Enhanced ground properties for stability
         p.changeDynamics(
             self.ground_id, -1,
-            lateralFriction=0.7,           # Realistic friction instead of infinite
-            spinningFriction=0.01,         # Small spinning friction
-            rollingFriction=0.001,         # Minimal rolling friction
-            restitution=0.05,              # Low restitution to prevent bouncing
-            contactDamping=100.0,          # Moderate contact damping
-            contactStiffness=1500.0,       # Moderate contact stiffness
-            linearDamping=0.15,            # Add some damping to reduce oscillations
+            lateralFriction=2.0,
+            spinningFriction=0.01,
+            rollingFriction=0.001,
+            restitution=0.0,
+            contactDamping=200.0,
+            contactStiffness=2500.0,
+            linearDamping=0.15,
             angularDamping=0.15
         )
         
@@ -215,13 +217,13 @@ class Environment:
         for joint_idx in range(p.getNumJoints(robot.body_id)):
             p.changeDynamics(
                 robot.body_id, joint_idx,
-                lateralFriction=0.8,
+                lateralFriction=2.0,
                 spinningFriction=0.01,
                 rollingFriction=0.001,
-                restitution=0.1,
-                contactDamping=50.0,
-                contactStiffness=3000.0,
-                jointDamping=0.05,  # Add joint damping to reduce oscillations
+                restitution=0.0,
+                contactDamping=200.0,
+                contactStiffness=2500.0,
+                jointDamping=0.05,
                 linearDamping=0.1,
                 angularDamping=0.1
             )

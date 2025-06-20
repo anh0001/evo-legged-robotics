@@ -122,15 +122,15 @@ class LeggedRobot:
         """Configure robot dynamics to reduce vibrations."""
         # Configure base dynamics
         p.changeDynamics(
-            self.body_id, -1,  # Base link
-            lateralFriction=0.8,        # Reduced for more realistic movement
-            spinningFriction=0.03,      # Increased to reduce spinning
-            rollingFriction=0.005,      # Increased slightly
-            restitution=0.02,           # Further reduced bouncing
-            contactDamping=120.0,       # Increased damping
-            contactStiffness=5000.0,    # Increased stiffness
-            linearDamping=0.25,         # Increased for stability
-            angularDamping=0.35         # Significantly increased to prevent spinning
+            self.body_id, -1,
+            lateralFriction=2.0,
+            spinningFriction=0.03,
+            rollingFriction=0.005,
+            restitution=0.0,
+            contactDamping=200.0,
+            contactStiffness=2500.0,
+            linearDamping=0.25,
+            angularDamping=0.35
         )
         
         # Configure joint dynamics
@@ -141,13 +141,13 @@ class LeggedRobot:
             if joint_type == p.JOINT_REVOLUTE:
                 p.changeDynamics(
                     self.body_id, joint_idx,
-                    lateralFriction=0.8,
+                    lateralFriction=2.0,
                     spinningFriction=0.03,
                     rollingFriction=0.005,
-                    restitution=0.02,
-                    contactDamping=120.0,
-                    contactStiffness=5000.0,
-                    jointDamping=0.15,        # Increased joint damping
+                    restitution=0.0,
+                    contactDamping=200.0,
+                    contactStiffness=2500.0,
+                    jointDamping=0.15,
                     linearDamping=0.25,
                     angularDamping=0.35
                 )
