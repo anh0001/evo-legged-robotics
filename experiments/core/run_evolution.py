@@ -302,15 +302,12 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                                 prev_rot_matrix, curr_rot_matrix,
                                 env.ground_id
                             )
-                            # Update population index to evaluate next individual
-                            vega.gai += 1
-                            if vega.gai >= vega.gan:          # population finished
-                                vega.gai = 0
-                                vega.iteration += 1           # one evolution cycle done
-                                vega.evolve()                 # create new population
-                            
-                            vega.gaj = 0  # Reset sequence index for next individual
-                            
+
+                            # evolve immediately to provide fresh gradients
+                            vega.evolve()
+                            vega.iteration += 1
+                            vega.gaj = 0
+
                             # Update results tracking
                             results['completed_iterations'] = vega.iteration
                             results['final_fitness'] = fitness_values.copy()

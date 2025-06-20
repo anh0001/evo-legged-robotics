@@ -267,7 +267,7 @@ class VEGA:
         
         # 1. Forward Motion (normalized to [0, 1])
         forward_base = math.exp(-angle_change**2) + distance * 10 + alignment
-        forward_fitness = np.clip(forward_base / 2.0, 0, 1)
+        forward_fitness = forward_base
         
         # 2. Stability (normalized to [0, 1])
         stability_fitness = self._calculate_normalized_stability_fitness(
