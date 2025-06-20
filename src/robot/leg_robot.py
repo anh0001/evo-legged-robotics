@@ -56,7 +56,14 @@ class LeggedRobot:
         
         # Map joints properly
         self._map_joints()
-        
+
+        # Provide legacy attribute names for compatibility with tests
+        self.leg_ids = list(range(self.leg_count))
+        self.dummy_leg_ids = self.joint2
+        self.joint_ids = [self.leg_joints[i][0] for i in range(self.leg_count)]
+        self.total_legs = self.leg_count
+        self.dummy_legs = self.dleg
+
         # Apply enhanced dynamics to robot
         self._configure_robot_dynamics()
     
@@ -400,3 +407,13 @@ class LeggedRobot:
                 self.body_id, joint_idx,
                 localInertiaDiagonal=[0.0001, 0.0001, 0.0001]
             )
+
+    # Compatibility property used in tests
+    @property
+    def t_angle(self):
+        return self.tang
+
+    @t_angle.setter
+    def t_angle(self, value):
+        self.tang = value
+
