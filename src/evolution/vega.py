@@ -559,17 +559,19 @@ class VEGA:
     
     def evolve(self):
         """Enhanced evolution with better stability focus."""
-        # Viruses mutate and infect hosts before ranking
-        self.mutate_viruses()
-        self.infect_hosts()
+        # Rank population before applying any virus operations
         self.rank()
 
-        # Identify elite individuals based on Pareto ranking
+        # Identify elite individuals based on Pareto ranking prior to mutation
         elite_count = max(1, int(self.gan * self.elite_fraction))
         elite_indices = self.parents[:elite_count]
         elite_hosts = self.hosts[elite_indices].copy()
         elite_lengths = self.host_lengths[elite_indices].copy()
         elite_fitness = self.fitness[elite_indices].copy()
+
+        # Viruses mutate and infect hosts after ranking so elites are preserved
+        self.mutate_viruses()
+        self.infect_hosts()
 
         # Archive elites for reference
         self.elite_archive = [
