@@ -76,8 +76,8 @@ class Environment:
             spinningFriction=0.01,
             rollingFriction=0.001,
             restitution=0.0,
-            contactDamping=200.0,
-            contactStiffness=2500.0,
+            contactDamping=30.0,
+            contactStiffness=300.0,
             linearDamping=0.15,
             angularDamping=0.15
         )

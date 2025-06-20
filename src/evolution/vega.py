@@ -50,10 +50,10 @@ class VEGA:
         self.dof = 3                  # Degree of freedom
         self.leg = 6                  # Number of legs
         
-        # Angle limits (in degrees)
-        self.q_min = np.array([-45, 0, 0])
-        self.q_range = np.array([90, 60, 60])
-        self.q_init = np.array([0, 45, 45])
+        # Angle limits
+        self.q_min   = np.deg2rad(np.array([-45, 0, 0]))
+        self.q_range = np.deg2rad(np.array([90, 60, 60]))
+        self.q_init  = np.deg2rad(np.array([0, 45, 45]))
         
         # Populations and fitness arrays
         self.hosts = np.zeros((self.gan, self.gal, 2, self.dof))

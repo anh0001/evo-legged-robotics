@@ -84,11 +84,9 @@ def setup_enhanced_robot(env):
     env.add_robot(robot)
     
     # Set conservative motor gains to prevent vibrations
-    robot.set_motor_gains(
-        kp=8.0,
-        kd=5.0,
-        max_force=12.0
-    )
+    robot.set_motor_gains(kp=2.5,   # Nm/rad
+                      kd=0.4,       # Nms/rad
+                      max_force=4.0)
     
     return robot
 
