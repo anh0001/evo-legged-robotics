@@ -49,6 +49,40 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+## Install or Reinstall Mesa DRI Drivers
+
+```bash
+sudo apt update
+sudo apt install --reinstall libgl1-mesa-dri libglx-mesa0 mesa-utils
+```
+
+- `libgl1-mesa-dri` provides the iris/swrast DRI drivers
+- `libglx-mesa0` provides the GLX library for Mesa  
+- `mesa-utils` gives you tools like `glxinfo` and `glxgears` to verify rendering
+
+After installing, verify direct rendering:
+
+```bash
+glxinfo | grep "direct rendering"
+```
+
+You should see `Yes`.
+
+### Switch GPU Mode on Hybrid Systems
+
+On laptops with both Intel and NVIDIA GPUs, the wrong profile can prevent loading the Intel (iris) driver. Switch to NVIDIA (or Intel) mode:
+
+```bash
+sudo prime-select nvidia
+```
+
+or for Intel:
+
+```bash
+sudo prime-select intel
+sudo reboot
+```
+
 ## Requirements
 
 - Python 3.7+
