@@ -64,15 +64,17 @@ def setup_enhanced_physics():
         'gravity': -9.81,
         'terrain_type': 'flat',
         # Additional Bullet3 parameters for stability
-        'num_solver_iterations': 50,  # More iterations for better constraint solving
+        'num_solver_iterations': 100,
+        'num_sub_steps': 2,
         'enable_cone_friction': True,
         'split_impulse_enabled': True,
         'split_impulse_penetration_threshold': -0.02,
         'contact_breaking_threshold': 0.02,
-        'restitution_velocity_threshold': 0.2,
-        'erp': 0.8,  # Error Reduction Parameter
-        'contact_erp': 0.8,
-        'friction_erp': 0.8
+        'restitution_velocity_threshold': 0.05,
+        'erp': 0.2,
+        'contact_erp': 0.1,
+        'friction_erp': 0.8,
+        'global_cfm': 1e-3
     }
 
 
@@ -83,9 +85,9 @@ def setup_enhanced_robot(env):
     
     # Set conservative motor gains to prevent vibrations
     robot.set_motor_gains(
-        kp=5.0,        # Position gain - reduced for stability
-        kd=3.0,        # Velocity gain - critical damping
-        max_force=10.0 # Conservative force limit
+        kp=8.0,
+        kd=5.0,
+        max_force=12.0
     )
     
     return robot
@@ -302,6 +304,10 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                                 prev_rot_matrix, curr_rot_matrix,
                                 env.ground_id
                             )
+                            # --- NEW: evolve immediately to provide fresh gradients ---
+                            vega.evolve()
+                            vega.iteration += 1
+                            vega.gaj = 0
                             
                             # Update results tracking
                             results['completed_iterations'] = vega.iteration
@@ -346,18 +352,8 @@ def run_evolution_loop(env, robot, vega, max_iterations, verbose=True, simulatio
                             prev_pos = curr_pos.copy()
                             prev_rot_matrix = curr_rot_matrix.copy()
                             
-                            # Advance evolution
-                            vega.iteration += 1
-
-                            # Choose next individual or evolve population
-                            if vega.iteration < vega.gan:
-                                vega.gai = vega.iteration % vega.gan
-                                vega.clear_motion_history()
-                            else:
-                                vega.evolve()  # gai updated inside evolve
-
-                            # Reset gait index for new individual
-                            vega.gaj = 0
+                            # Store state for next evaluation before resetting
+                            
                             
                             # Smooth reset with settling time to prevent vibrations
                             robot.reset_posture(smooth=True)
