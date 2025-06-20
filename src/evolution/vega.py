@@ -743,39 +743,34 @@ class VEGA:
                     self.hosts[n, m, i, j] = -self.hosts[n, m, i, j]
     
     def get_target_angles(self):
-        """Get target angles with enhanced bounds checking."""
+        """Get target angles with correct angle handling."""
         gaj = self.gaj % self.host_lengths[self.gai]
         angles = np.zeros((6, 3))
         
         for i in range(6):
             for j in range(3):
+                phase = 0 if i % 2 == 0 else 1
+                angle_rad = self.hosts[self.gai, gaj, phase, j]  # Already in radians
+                
                 if j == 0:  # First DOF
-                    phase = 0 if i % 2 == 0 else 1
-                    angle_deg = self.hosts[self.gai, gaj, phase, j]
-                    # Updated range to match joint limits (-45 to 45 degrees)
+                    # Clip to joint limits (already in radians)
                     min_angle = self.q_min[0]
                     max_angle = self.q_min[0] + self.q_range[0]
-                    angle_deg = np.clip(angle_deg, min_angle, max_angle)
-                    angles[i, j] = np.radians(angle_deg)
+                    angle_rad = np.clip(angle_rad, min_angle, max_angle)
+                    angles[i, j] = angle_rad
                 else:  # DOF 1 and 2
-                    phase = 0 if i % 2 == 0 else 1
-                    angle_deg = self.hosts[self.gai, gaj, phase, j]
-                    # FIXED: Conservative joint limits with safety margins
-                    min_angle = self.q_min[j] + 2.0  # Safety margin
-                    max_angle = self.q_min[j] + self.q_range[j] - 2.0
-                    angle_deg = np.clip(angle_deg, min_angle, max_angle)
+                    # Apply safety margins (in radians)
+                    safety_margin = np.deg2rad(2.0)
+                    min_angle = self.q_min[j] + safety_margin
+                    max_angle = self.q_min[j] + self.q_range[j] - safety_margin
+                    angle_rad = np.clip(angle_rad, min_angle, max_angle)
 
-                    if i < 3:  # Right side
-                        angles[i, j] = -np.radians(angle_deg)
-                    else:  # Left side
-                        angles[i, j] = np.radians(angle_deg)
+                    # Right legs invert the sign
+                    if i < 3:
+                        angles[i, j] = -angle_rad
+                    else:
+                        angles[i, j] = angle_rad
 
-        # Ensure generated angles respect joint limits for the first DOF
-        rad_min = np.radians(self.q_min[0])
-        rad_max = np.radians(self.q_min[0] + self.q_range[0])
-        assert np.all((angles[:, 0] >= rad_min) & (angles[:, 0] <= rad_max)), (
-            "Generated target angles exceed allowed limits for DOF0")
-        
         return angles
     
     def plot_enhanced_fitness_history(self):
