@@ -263,80 +263,69 @@ class VEGA:
         if distance > 0:
             alignment = np.dot(rr, v) / distance
 
-        # FIXED: Improved Fitness Components with proper scaling
+        # EXPANDED RANGE: Remove normalization clipping for better gradient
         
-        # 1. Forward Motion (normalized to [0, 1])
-        forward_base = math.exp(-angle_change**2) + distance * 10 + alignment
-        forward_fitness = forward_base
+        # 1. Forward Motion (expanded range [0, 100+])
+        forward_fitness = (
+            50 * (1 / (1 + angle_change**2)) +  # Smooth penalty instead of exp
+            distance * 100 +                    # Increased scale
+            alignment * 25                      # Increased alignment reward
+        )
         
-        # 2. Stability (normalized to [0, 1])
-        stability_fitness = self._calculate_normalized_stability_fitness(
+        # 2. Stability (expanded range [0, 200+])
+        stability_fitness = self._calculate_expanded_stability_fitness(
             stability_metrics, curr_rot, robot_state
         )
         
-        # 3. Energy Efficiency (normalized to [0, 1]) 
-        energy_fitness = self._calculate_normalized_energy_fitness(robot_state, distance)
+        # 3. Energy Efficiency (expanded range [0, 50+])
+        energy_fitness = self._calculate_expanded_energy_fitness(robot_state, distance)
         
-        # 4. Smoothness (FIXED: better scaling)
-        smoothness_fitness = self._calculate_normalized_smoothness_fitness(
+        # 4. Smoothness (expanded range [0, 100+])
+        smoothness_fitness = self._calculate_expanded_smoothness_fitness(
             robot, robot_state, displacement
         )
-        closure_penalty = self._cycle_closure_penalty(self.gai)
-        smoothness_fitness *= math.exp(-closure_penalty * 2.0)
-        smoothness_fitness = float(np.clip(smoothness_fitness, 0, 1))
         
-        # 5. Direction Control (normalized to [0, 1])
-        direction_fitness = math.exp(-direction_error**2)  # Already in [0,1]
+        # 5. Direction Control (expanded range [0, 50+])
+        direction_fitness = 50 * (1 / (1 + direction_error**2))  # Polynomial instead of exp
         
-        # 6. Foot Contact Quality (normalized to [0, 1])
-        contact_fitness = self._calculate_normalized_contact_fitness(robot, ground_id)
+        # 6. Foot Contact Quality (expanded range [0, 30+])
+        contact_fitness = self._calculate_expanded_contact_fitness(robot, ground_id)
         
-        # FIXED: Weighted combination in normalized space [0, 1]
-        normalized_fitness = [
-            forward_fitness,
-            stability_fitness, 
-            energy_fitness,
-            smoothness_fitness,
-            direction_fitness,
-            contact_fitness
-        ]
-        
-        # Apply weights AFTER normalization
+        # Apply weights to expanded fitness values (no pre-normalization)
         weighted_fitness = [
-            normalized_fitness[0] * self.fitness_weights['forward_motion'],
-            normalized_fitness[1] * self.fitness_weights['stability'],
-            normalized_fitness[2] * self.fitness_weights['energy_efficiency'], 
-            normalized_fitness[3] * self.fitness_weights['smoothness'],
-            normalized_fitness[4] * self.fitness_weights['direction_control'],
-            normalized_fitness[5] * self.fitness_weights['foot_contact']
+            forward_fitness * self.fitness_weights['forward_motion'],
+            stability_fitness * self.fitness_weights['stability'],
+            energy_fitness * self.fitness_weights['energy_efficiency'], 
+            smoothness_fitness * self.fitness_weights['smoothness'],
+            direction_fitness * self.fitness_weights['direction_control'],
+            contact_fitness * self.fitness_weights['foot_contact']
         ]
 
-        # Multiplicative penalties to scale fitness components
+        # ADDITIVE penalties instead of multiplicative (preserves gradient)
         stability_penalty = 0.0
         if stability_metrics['vertical_stability'] < 0.3:
-            stability_penalty = self.penalty_factors['stability_high']
+            stability_penalty = 50.0  # Significant but not multiplicative
         elif stability_metrics['vertical_stability'] < 0.5:
-            stability_penalty = self.penalty_factors['stability_low']
+            stability_penalty = 20.0
 
         angular_penalty = 0.0
         if stability_metrics['angular_speed'] > 6.0:
-            angular_penalty = self.penalty_factors['angular_high']
+            angular_penalty = 30.0
         elif stability_metrics['angular_speed'] > 4.0:
-            angular_penalty = self.penalty_factors['angular_low']
+            angular_penalty = 15.0
 
-        # Soft penalties instead of nullifying fitness
-        stability_mult = 0.9 if stability_penalty > 0 else 1.0
-        angular_mult = 0.9 if angular_penalty > 0 else 1.0
-
+        # Apply additive penalties (maintains gradient better than multiplicative)
         final_fitness = [
-            weighted_fitness[0] * stability_mult,
-            weighted_fitness[1] * stability_mult,
-            weighted_fitness[2] * angular_mult,
-            weighted_fitness[3] * angular_mult,
-            weighted_fitness[4] * stability_mult,
-            weighted_fitness[5] * stability_mult,
+            weighted_fitness[0] - stability_penalty * self.penalty_factors['forward_weight'],
+            weighted_fitness[1] - stability_penalty * self.penalty_factors['stability_weight'],
+            weighted_fitness[2] - angular_penalty * self.penalty_factors['energy_weight'],
+            weighted_fitness[3] - angular_penalty * self.penalty_factors['smoothness_weight'],
+            weighted_fitness[4] - stability_penalty * self.penalty_factors['direction_weight'],
+            weighted_fitness[5] - stability_penalty * self.penalty_factors['contact_weight'],
         ]
-        final_fitness = [max(0, f) for f in final_fitness]
+        
+        # MINIMAL clipping - only prevent extreme negatives, preserve dynamic range
+        final_fitness = [max(-50.0, f) for f in final_fitness]  # Allow negative values for gradient
         
         self.fitness[self.gai] = final_fitness
 
@@ -379,71 +368,74 @@ class VEGA:
         
         return self.fitness[self.gai]
     
-    def _calculate_normalized_stability_fitness(self, stability_metrics, curr_rot, robot_state):
-        """FIXED: Normalized stability fitness in [0, 1]."""
-        vertical_component = max(0, stability_metrics['vertical_stability'])
-        height_component = max(0, 1.0 / (1.0 + abs(robot_state['position'][2] - 0.35)))
+    def _calculate_expanded_stability_fitness(self, stability_metrics, curr_rot, robot_state):
+        """Expanded stability fitness with better dynamic range."""
+        vertical_component = stability_metrics['vertical_stability'] * 100  # Scale up
         
-        # More lenient angular penalty
-        angular_penalty = max(0, 1.0 / (1.0 + stability_metrics['angular_speed'] / 3.0))
+        # Height component with polynomial scaling
+        height_diff = abs(robot_state['position'][2] - 0.35)
+        height_component = 50 * (1 / (1 + height_diff * 5))  # Polynomial instead of exp
         
+        # Angular velocity with polynomial penalty
+        angular_speed = stability_metrics['angular_speed']
+        angular_component = 50 * (1 / (1 + angular_speed / 2.0))  # More gradual penalty
+        
+        # Roll/pitch stability with expanded range
         rot_matrix = np.array(curr_rot).reshape(3, 3)
         try:
             roll = math.asin(max(-0.99, min(0.99, -rot_matrix[2, 1])))
             pitch = math.asin(max(-0.99, min(0.99, rot_matrix[2, 0])))
-            roll_pitch_stability = math.exp(-(roll**2 + pitch**2) / 2.0)  # More lenient
+            roll_pitch_component = 30 * (1 / (1 + (roll**2 + pitch**2) * 2))  # Polynomial
         except:
-            roll_pitch_stability = 0.5
+            roll_pitch_component = 15
         
-        # Weighted combination normalized to [0, 1]
+        # Sum instead of weighted average for higher range
         stability_fitness = (
-            vertical_component * 0.5 +
-            height_component * 0.2 +
-            angular_penalty * 0.2 +
-            roll_pitch_stability * 0.1
+            vertical_component + 
+            height_component + 
+            angular_component + 
+            roll_pitch_component
         )
         
-        return np.clip(stability_fitness, 0, 1)
-    
-    def _calculate_normalized_energy_fitness(self, robot_state, distance):
-        """FIXED: Normalized energy fitness in [0, 1]."""
+        return max(0, stability_fitness)  # Only clip extreme negatives
+
+    def _calculate_expanded_energy_fitness(self, robot_state, distance):
+        """Expanded energy fitness with polynomial scaling."""
         joint_angles = robot_state['joint_angles']
         
         if self.prev_robot_state is not None:
             prev_angles = self.prev_robot_state['joint_angles']
             joint_velocities = np.abs(joint_angles - prev_angles)
             
-            # Energy cost
-            energy_cost = np.mean(joint_velocities**2)  # Use mean instead of sum
+            # Energy cost with polynomial relationship
+            energy_cost = np.mean(joint_velocities**2)
             
-            # Efficiency = distance per unit energy cost
+            # Efficiency with expanded range
             if energy_cost > 0:
-                efficiency = distance / (energy_cost + 0.01)
+                efficiency = (distance * 50) / (energy_cost + 0.01)  # Scale up
             else:
-                efficiency = distance
+                efficiency = distance * 50
         else:
-            efficiency = distance
+            efficiency = distance * 50
         
-        # Normalize to [0, 1] - assume max efficiency around 5.0
-        return np.clip(efficiency / 5.0, 0, 1)
-    
-    def _calculate_normalized_smoothness_fitness(self, robot, robot_state, displacement):
-        """FIXED: Normalized smoothness fitness in [0, 1] with better scaling."""
-        smoothness_score = 0
+        return max(0, efficiency)  # Remove upper clipping
+
+    def _calculate_expanded_smoothness_fitness(self, robot, robot_state, displacement):
+        """Expanded smoothness fitness with polynomial scaling."""
+        smoothness_score = 50  # Higher baseline
         
-        # Track motion history for smoothness calculation
+        # Track motion history
         self.motion_history.append({
             'position': robot_state['position'],
             'displacement': displacement,
             'joint_angles': robot_state['joint_angles']
         })
         
-        # Keep only recent history
-        if len(self.motion_history) > 5:  # Shorter history for responsiveness
+        if len(self.motion_history) > 5:
             self.motion_history.pop(0)
         
         if len(self.motion_history) >= 3:
-            # Calculate velocity smoothness
+            # Velocity smoothness with polynomial scaling
             recent_displacements = [m['displacement'] for m in self.motion_history[-3:]]
             
             vel_changes = []
@@ -451,50 +443,52 @@ class VEGA:
                 vel_change = np.linalg.norm(recent_displacements[i] - recent_displacements[i-1])
                 vel_changes.append(vel_change)
             
-            # FIXED: More lenient exponential decay
             if vel_changes:
                 avg_vel_change = np.mean(vel_changes)
-                smoothness_score = math.exp(-avg_vel_change * 2)  # Reduced from 10
+                # Polynomial penalty instead of exponential
+                velocity_smoothness = 50 * (1 / (1 + avg_vel_change * 3))
+            else:
+                velocity_smoothness = 50
             
-            # Joint angle smoothness
+            # Joint smoothness with polynomial scaling
             recent_angles = [m['joint_angles'] for m in self.motion_history[-3:]]
             angle_changes = []
             for i in range(1, len(recent_angles)):
-                angle_change = np.mean(np.abs(recent_angles[i] - recent_angles[i-1]))  # Mean instead of norm
+                angle_change = np.mean(np.abs(recent_angles[i] - recent_angles[i-1]))
                 angle_changes.append(angle_change)
             
             if angle_changes:
                 avg_angle_change = np.mean(angle_changes)
-                joint_smoothness = math.exp(-avg_angle_change * 1)  # Reduced from 2
-                smoothness_score = (smoothness_score + joint_smoothness) / 2
+                joint_smoothness = 50 * (1 / (1 + avg_angle_change * 2))
+            else:
+                joint_smoothness = 50
+            
+            smoothness_score = velocity_smoothness + joint_smoothness
         
-        return np.clip(smoothness_score, 0, 1)
-    
-    def _calculate_normalized_contact_fitness(self, robot, ground_id):
-        """FIXED: Normalized contact fitness in [0, 1]."""
+        # Apply cycle closure penalty additively
+        closure_penalty = self._cycle_closure_penalty(self.gai) * 20  # Additive penalty
+        
+        return max(0, smoothness_score - closure_penalty)
+
+    def _calculate_expanded_contact_fitness(self, robot, ground_id):
+        """Expanded contact fitness with more granular scoring."""
         contacts = 0
+        contact_quality = 0
+        
         for i in range(robot.leg_count):
             foot_link = robot.leg_joints[i][2]
             pts = p.getContactPoints(bodyA=robot.body_id, linkIndexA=foot_link, bodyB=ground_id)
             if len(pts) > 0:
                 contacts += 1
-
-        # Already normalized to [0, 1]
-        return contacts / robot.leg_count
-
-    def _cycle_closure_penalty(self, idx):
-        """Penalty for discontinuity between first and last poses."""
-        length = int(self.host_lengths[idx])
-        if length < 2:
-            return 0.0
-
-        start_pose = self.hosts[idx, 0]
-        end_pose = self.hosts[idx, length - 1]
-
-        diff = np.abs(end_pose - start_pose)
-        norm_diff = diff / self.q_range
-        penalty = float(np.mean(norm_diff))
-        return np.clip(penalty, 0.0, 1.0)
+                # Add contact force quality
+                total_force = sum(pt[9] for pt in pts)  # Normal force
+                contact_quality += min(total_force, 10.0)  # Cap individual contact force
+        
+        # Expanded scoring: base contact count + quality bonus
+        base_score = (contacts / robot.leg_count) * 20  # Base score [0, 20]
+        quality_bonus = contact_quality  # Quality bonus [0, 60]
+        
+        return base_score + quality_bonus
 
     def infect_hosts(self):
         """Apply viruses to each host chromosome."""
