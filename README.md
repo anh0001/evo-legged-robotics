@@ -130,14 +130,13 @@ python experiments/core/run_evolution.py --max-iterations=1000 --real-time
 Test the ablation framework with minimal configurations (recommended for first-time users):
 
 ```bash
-python experiments/studies/ablation_study.py --configs=minimal --runs=3
+python experiments/studies/ablation_study.py --quick-test
 ```
 
 For a comprehensive ablation study (takes longer but tests all configurations):
 
 ```bash
-python experiments/studies/ablation_study.py --full-study
-python experiments/studies/ablation_study.py --config=experiments/configs/ablation_configs.yaml --runs=50
+python experiments/studies/ablation_study.py --config=experiments/configs/ablation_configs.yaml --runs=50 --parallel --max-workers=8
 ```
 
 #### Test Visualization System
