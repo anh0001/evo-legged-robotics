@@ -466,9 +466,42 @@ class VEGA:
             smoothness_score = velocity_smoothness + joint_smoothness
         
         # Apply cycle closure penalty additively
-        closure_penalty = self._cycle_closure_penalty(self.gai) * 20  # Additive penalty
+        closure_penalty = self._cycle_closure_penalty(self.gai) * 0.0001  # Additive penalty
         
         return max(0, smoothness_score - closure_penalty)
+
+    def _cycle_closure_penalty(self, individual):
+        """Calculate cycle closure penalty for smoothness."""
+        try:
+            sequence_length = self.host_lengths[individual]
+
+            # Get first and last postures in the sequence
+            first_posture = self.hosts[individual, 0, :, :]  # Shape: (2, dof)
+            last_posture = self.hosts[individual, sequence_length - 1, :, :]  # Shape: (2, dof)
+
+            # Calculate angle differences between last and first postures
+            total_penalty = 0.0
+            for phase in range(2):  # Two phases per posture
+                for dof in range(self.dof):  # Three DOF per leg
+                    # Calculate angular difference
+                    angle_diff = abs(last_posture[phase, dof] - first_posture[phase, dof])
+                    # Normalize to [0, pi] range (shortest angular path)
+                    while angle_diff > np.pi:
+                        angle_diff -= 2 * np.pi
+                    angle_diff = abs(angle_diff)
+                    # Add to penalty (larger differences = higher penalty)
+                    total_penalty += angle_diff
+
+            # Normalize penalty by number of angles compared
+            normalized_penalty = total_penalty / (2 * self.dof)
+
+            # Scale penalty to reasonable range [0, 1]
+            scaled_penalty = min(normalized_penalty / np.pi, 1.0)
+
+            return scaled_penalty
+        except Exception as e:
+            self.logger.warning(f"Error calculating cycle closure penalty for individual {individual}: {e}")
+            return 0.0
 
     def _calculate_expanded_contact_fitness(self, robot, ground_id):
         """Expanded contact fitness with more granular scoring."""
@@ -988,3 +1021,54 @@ class VEGA:
         
         self.logger.info(f"Evolution summary saved to {filename}")
         return filename
+
+    def _cycle_closure_penalty(self, individual_idx):
+        """
+        Calculate cycle closure penalty for smooth locomotion sequences.
+        
+        This penalty encourages smooth transitions when a motion sequence repeats,
+        preventing abrupt jumps between the last and first postures.
+        
+        Args:
+            individual_idx: Index of the individual to evaluate
+            
+        Returns:
+            Penalty value (0 = no penalty, higher = worse closure)
+        """
+        if individual_idx >= len(self.host_lengths) or self.host_lengths[individual_idx] <= 1:
+            return 0.0
+        
+        try:
+            sequence_length = self.host_lengths[individual_idx]
+            
+            # Get first and last postures in the sequence
+            first_posture = self.hosts[individual_idx, 0, :, :]  # Shape: (2, dof)
+            last_posture = self.hosts[individual_idx, sequence_length - 1, :, :]  # Shape: (2, dof)
+            
+            # Calculate angle differences between last and first postures
+            total_penalty = 0.0
+            
+            for phase in range(2):  # Two phases per posture
+                for dof in range(self.dof):  # Three DOF per leg
+                    # Calculate angular difference
+                    angle_diff = abs(last_posture[phase, dof] - first_posture[phase, dof])
+                    
+                    # Normalize to [0, pi] range (shortest angular path)
+                    while angle_diff > np.pi:
+                        angle_diff -= 2 * np.pi
+                    angle_diff = abs(angle_diff)
+                    
+                    # Add to penalty (larger differences = higher penalty)
+                    total_penalty += angle_diff
+            
+            # Normalize penalty by number of angles compared
+            normalized_penalty = total_penalty / (2 * self.dof)
+            
+            # Scale penalty to reasonable range [0, 1]
+            scaled_penalty = min(normalized_penalty / np.pi, 1.0)
+            
+            return scaled_penalty
+            
+        except Exception as e:
+            self.logger.warning(f"Error calculating cycle closure penalty for individual {individual_idx}: {e}")
+            return 0.0
